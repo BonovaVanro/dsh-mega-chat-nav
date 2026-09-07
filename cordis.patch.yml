@@ -1,0 +1,4 @@
+# dsh bundle patch：row id 避开官方 core row（tools/session/llm/web/permission）
+- insert:
+    - id: ui-mega-chat-nav
+      name: dsh-mega-chat-nav

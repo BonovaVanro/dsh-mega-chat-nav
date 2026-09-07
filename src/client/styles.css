@@ -1,0 +1,1580 @@
+.mgcn-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  background: transparent;
+  /* Overlay: let pointer events pass through to the conversation beyond the
+     dots, so the embedded minimap never blocks the chat. */
+  pointer-events: none;
+}
+
+/* Right-anchored rail: release the CSS `left: 0` so the inline `right`
+   (written by the layout-correction loop) owns the position. */
+.mgcn-railRight {
+  left: auto;
+}
+
+/* The paging queue: holds a single .mgcn-list (the dot band plus the floating
+   action controls as its children). Clamped to 60% of the conversation height
+   and vertically centered (auto margins). The band re-enables pointer events;
+   the wrapper stays pass-through. All action controls (search/settings/count
+   + ▲/▼) float relative to the list via .mgcn-actions/.mgcn-pageUp/
+   .mgcn-pageDown — never mixed into the dot flow. */
+.mgcn-queue {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 60%;
+  margin: auto 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* The middle dot band: the only scrollable part of the queue. Scrolls from the
+   top (overflow collapses the auto margins to 0). The native scrollbar is
+   always hidden: this is a minimap paged by the ▲/▼ buttons and by
+   wheel/trackpad, and overflow is signalled by the ▲/▼ triangles themselves
+   (each appears only while its direction has more dots to reveal). */
+.mgcn-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  position: relative;          /* 操作区定位上下文；无 overflow，悬浮件不被裁剪 */
+  max-height: min(var(--mgcn-band-height, 210px), 60vh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+}
+
+/* ---- 操作区：.mgcn-list 子级，相对条带悬浮（列表上方外侧竖排，不占列表高度） ---- */
+.mgcn-actions {
+  position: absolute;
+  bottom: calc(100% + 22px);  /* 操作区：条带上缘外侧 22px（紧凑让位 ▲ 翻页位） */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;       /* 容器穿透：事件只落在按钮层（隐藏态不挡 rail） */
+}
+.mgcn-actions .mgcn-gear-wrap {
+  pointer-events: auto;
+}
+.mgcn-actions .mgcn-config-panel,
+.mgcn-actions .mgcn-search {
+  pointer-events: auto;       /* 浮层面板仍需接收 */
+}
+/* 翻页标记隐藏（配置 hide）或不可滚动时，▲/▼ 完全不渲染：
+   操作区不再预留翻页空位，改为紧贴条带上缘（6px 间隙） */
+.mgcn-listNoPage .mgcn-actions {
+  bottom: calc(100% + 6px);
+}
+
+/* ▲/▼ 翻页：贴列表上下边缘外侧 */
+.mgcn-pageUp {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  pointer-events: auto;
+}
+.mgcn-pageDown {
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  pointer-events: auto;
+}
+
+/* 圆点：默认实心灰点；被 hover 时变空心（品牌描边 + 透明底）；聚焦/激活为实心品牌圆 */
+.mgcn-dot {
+  flex: none;
+  pointer-events: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--dsw-alias-border-l3, var(--dsw-alias-label-tertiary));  /* 实心 */
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+/* 被 hover / 聚焦（级联选中）：空心（品牌描边），配合 1.5 倍放大 */
+.mgcn-dot:hover,
+.mgcn-dot.mgcn-focused {
+  background: transparent;
+  border-color: var(--dsw-alias-brand-primary);
+}
+.mgcn-dot.mgcn-active {
+  background: var(--dsw-alias-brand-primary);
+  border-color: var(--dsw-alias-brand-primary);
+}
+/* 激活（阅读位置）节点：实心品牌圆 */
+.mgcn-dot.mgcn-current {
+  background: var(--dsw-alias-brand-primary);
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+/* Click-paging feedback: dots revealed by a ▲/▼ click pop in with a staggered
+   fade + rise/drop (per-dot animation-delay is set inline, stagger order *
+   35ms), traveling in the paging direction so the newly revealed batch reads
+   as "the click brought these in". `both` fill holds the hidden `from` state
+   during each dot's delay. */
+@keyframes mgcn-dotEnterFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.4);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes mgcn-dotEnterFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-7px) scale(0.4);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.mgcn-dotEnterFromBottom {
+  animation: mgcn-dotEnterFromBottom 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.mgcn-dotEnterFromTop {
+  animation: mgcn-dotEnterFromTop 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mgcn-dotEnterFromBottom,
+  .mgcn-dotEnterFromTop {
+    animation: none;
+  }
+}
+
+/* Question count, rendered just above the first dot (sits in the list gap). */
+.mgcn-count {
+  flex: none;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+/* The centered group: dot column, centered together (the list's auto
+   margins center it when short; it scrolls as a unit when tall). */
+/* 滚动容器：圆点列在此滚动（.mgcn-list 只负责条带几何与操作区锚定） */
+.mgcn-dots {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  pointer-events: auto;
+}
+.mgcn-dots::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Paging triangles (▲ above the dot queue, ▼ below), styled like the dots:
+   a plain triangle in the dot's quiet border color that lights up brand on
+   hover. Clicking pages the band by DOT_PAGE_ROWS dots. The triangle is a
+   pure CSS border triangle so it stays crisp at any DPI; the button box is a
+   slightly larger transparent hit target. */
+.mgcn-navBtn {
+  flex: none;
+  pointer-events: auto;
+  width: 14px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mgcn-navBtn::before {
+  content: '';
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  transition: border-color 120ms ease;
+}
+.mgcn-navUp::before {
+  border-bottom: 7px solid var(--dsw-alias-border-l3);
+}
+.mgcn-navDown::before {
+  border-top: 7px solid var(--dsw-alias-border-l3);
+}
+.mgcn-navUp:hover::before {
+  border-bottom-color: var(--dsw-alias-brand-primary);
+}
+.mgcn-navDown:hover::before {
+  border-top-color: var(--dsw-alias-brand-primary);
+}
+
+.mgcn-empty {
+  padding: 10px 4px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+  word-break: break-word;
+}
+
+/* Transient jump-failure hint (portal-rendered near the rail top, so it never
+   pushes the centered dot band or clips in the 44px-wide rail). */
+.mgcn-hint {
+  position: fixed;
+  z-index: 30;
+  max-width: 260px;
+  background: var(--dsw-alias-bg-layer-3);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+.mgcn-hint--bottom {
+  top: auto;
+  bottom: 150px;   /* 对话输入框上方 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+/* 加载点动画 */
+.mgcn-hint-dots {
+  display: inline-flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.mgcn-hint-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary);
+  opacity: 0.35;
+  animation: mgcnHintDot 900ms ease-in-out infinite;
+}
+.mgcn-hint-dots i:nth-child(2) { animation-delay: 150ms; }
+.mgcn-hint-dots i:nth-child(3) { animation-delay: 300ms; }
+@keyframes mgcnHintDot {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* The vertical focus cascade: one crisp question card per window dot, stacked
+   top-to-bottom without overlap, centered on the selected dot. The container
+   stays pass-through; only the cards are interactive. */
+.mgcn-cascade {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+/* Right-aligned rail: the cascade opens to the LEFT of the rail, so the
+   column hugs the rail by stacking its cards against the right edge. */
+.mgcn-cascadeRight {
+  align-items: flex-end;
+}
+
+/* One focus question card (portal-rendered in the cascade). The four context
+   cards use the base style: a clean solid surface, a quiet neutral border and
+   a low shadow — crisp and readable, one visual step behind the focus card.
+   The surface is the theme's TOP elevation layer (bg-layer-3, the same token
+   DSH menus and popups use): these cards float above the conversation, and in
+   dark themes the layer ramp gives them the raised-surface tint. Clicking
+   jumps to the question, like the dot; hover raises the border to signal the
+   card is interactive. */
+.mgcn-card {
+  width: 380px;
+  background: var(--dsw-alias-bg-layer-3);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  padding: 8px 12px 10px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.10);
+  white-space: normal;
+  word-break: break-word;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.mgcn-card:hover {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The selected (center) card — the focus of the cascade: full-contrast text,
+   a brand left accent bar (inset, so it follows the rounded corners) and a
+   raised shadow lift it above the four context cards. */
+.mgcn-cardSelected {
+  border-color: var(--dsw-alias-border-l1);   /* 四边统一淡边框（原方案） */
+  color: var(--dsw-alias-label-primary);
+  box-shadow:
+    inset 3px 0 0 0 var(--dsw-alias-brand-primary),
+    0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.mgcn-cardSelected:hover {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow:
+    inset 3px 0 0 0 var(--dsw-alias-brand-primary),
+    0 6px 22px rgba(0, 0, 0, 0.26);
+}
+
+/* Right-aligned rail: the focus card's accent bar mirrors to the right edge
+   (the side facing the rail). Declared after .mgcn-cardSelected:hover so the
+   mirrored bar wins at equal specificity. */
+.mgcn-cardSelectedRight {
+  border-color: var(--dsw-alias-border-l1);   /* 镜像同：四边统一淡边框 */
+  box-shadow:
+    inset -3px 0 0 0 var(--dsw-alias-brand-primary),
+    0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.mgcn-cardSelectedRight:hover {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow:
+    inset -3px 0 0 0 var(--dsw-alias-brand-primary),
+    0 6px 22px rgba(0, 0, 0, 0.26);
+}
+
+/* Turn label line at the top of the card ("Turn 32"). */
+.mgcn-cardHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mgcn-cardFav {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 120ms ease;
+}
+.mgcn-cardFav:hover { color: var(--dsw-alias-brand-primary); }
+.mgcn-cardFavOn { color: var(--dsw-alias-brand-primary); }
+.mgcn-cardMetrics {
+  font-size: 11px;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+  margin-bottom: 4px;
+}
+.mgcn-cardTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary);
+  margin: 0;
+}
+
+/* Question body; long multi-question turns scroll inside the card. The
+   scrollbar stays themed: NO `scrollbar-width` here — a non-auto value makes
+   Chromium/Safari drop the GUI's `::-webkit-scrollbar*` skin for this element
+   (see ui-theme styles/scrollbar.mgcn-css). Firefox still gets a thin themed bar
+   from the theme's `body *` rule, which reads the rebound tokens below. */
+.mgcn-cardBody {
+  max-height: 96px;
+  overflow-y: auto;
+  /* Elevated surface (bg-layer-3): the scrollbar thumb takes the l2 elevation
+     tokens, matching DSH menus/popovers. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  /* 悬浮卡滚动条细一倍（8px → 4px）：只覆盖 webkit 宽度，保留全局 thumb 皮肤；
+     不可设 scrollbar-width（非 auto 会使 Chromium/Safari 丢弃 ::-webkit-scrollbar 皮肤） */
+}
+.mgcn-cardBody::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.mgcn-cardBody::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+}
+
+/* Clamped cascade-card text (the two neighbors on each side): N lines with
+   ellipsis via -webkit-line-clamp (set inline). Inherits the card's text
+   color (secondary on context cards, primary on the focus card). */
+.mgcn-cardClamp {
+  font-size: 13px;
+  line-height: 18px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* Question sent-time line (HH:MM / MM-DD HH:MM / YYYY-MM-DD HH:MM). */
+.mgcn-cardTime {
+  margin: 0;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Settings page (settings.mgcn-plugins.mgcn-tab). */
+.mgcn-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+/* 配置项行：左右结构——左（名称+说明，左对齐）右（控件，垂直居中、右对齐） */
+.mgcn-settingsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+.mgcn-settingsLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;   /* 左侧文本左对齐 */
+  gap: 2px;
+  text-align: left;
+}
+.mgcn-settingsTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  margin: 0;
+}
+.mgcn-settingsDesc {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  margin: 0;
+}
+/* 右侧控件区：垂直居中、贴右 */
+.mgcn-settingsControl {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.mgcn-settingsControl .mgcn-segmented {
+  align-self: center;        /* 覆盖全局 flex-start，保证垂直居中 */
+}
+.mgcn-segmented {
+  display: inline-flex;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: flex-start;
+}
+.mgcn-segment {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 1;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.mgcn-segment + .mgcn-segment {
+  border-left: 1px solid var(--dsw-alias-border-l1);
+}
+.mgcn-segment:hover {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+.mgcn-segmentActive,
+.mgcn-segmentActive:hover {
+  background: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-primary-inverted);
+}
+
+/* ---- ⚙ 组件内面板（高频配置） ---- */
+.mgcn-config-gear {
+  pointer-events: auto;
+  border: none;
+  background: transparent;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: color 120ms ease, background 120ms ease;
+}
+.mgcn-config-gear:hover {
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+}
+.mgcn-gear-wrap {
+  position: relative;
+  display: inline-flex;
+}
+/* 面板打开方向随停靠侧：右对齐向左弹，左对齐向右弹 */
+.mgcn-gear-wrap--right .mgcn-config-panel {
+  right: calc(100% + 8px);
+  left: auto;
+}
+.mgcn-gear-wrap--left .mgcn-config-panel {
+  left: calc(100% + 8px);
+  right: auto;
+}
+.mgcn-config-panel {
+  position: absolute;
+  top: 0;                     /* 顶边与齿轮按钮对齐 */
+  z-index: 62;
+  width: max-content;         /* 自适应宽度 */
+  min-width: 200px;
+  max-width: 320px;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--mgcn-border, var(--dsw-alias-border-l2));
+  background: var(--mgcn-bg-raised, var(--dsw-alias-bg-layer-3));
+  box-shadow: var(--mgcn-shadow, var(--dsw-shadow-lv2));
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+  font-size: 12px;
+  pointer-events: auto;
+}
+.mgcn-config-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mgcn-config-title {
+  font-weight: 600;
+}
+.mgcn-config-close {
+  border: none;
+  background: transparent;
+  color: var(--mgcn-fg-secondary, var(--dsw-alias-label-secondary));
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.mgcn-config-close:hover {
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+}
+.mgcn-config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mgcn-config-label {
+  color: var(--mgcn-fg-secondary, var(--dsw-alias-label-secondary));
+  flex-shrink: 0;
+}
+/* ---- 快捷设置面板：mini 设计（紧凑尺寸） ---- */
+.mgcn-config-panel {
+  min-width: 180px;
+  max-width: 280px;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.mgcn-config-panel .mgcn-config-title {
+  font-size: 11px;
+}
+.mgcn-config-panel .mgcn-config-close {
+  font-size: 10px;
+  padding: 1px 3px;
+  border-radius: 4px;
+}
+.mgcn-config-panel .mgcn-config-row {
+  gap: 6px;
+}
+.mgcn-config-panel .mgcn-config-label {
+  font-size: 11px;
+}
+.mgcn-config-panel .mgcn-segmented {
+  border-radius: 6px;
+}
+.mgcn-config-panel .mgcn-segment {
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+}
+.mgcn-config-panel .mgcn-config-sep {
+  margin: 1px 0;
+}
+
+/* ---- 浮现态（JS 状态驱动：进入 rail 立即显示、移出后延迟 1s 隐藏） ----
+   过渡设计：浮现时立即可见再淡入（基类 visibility 0s 即时切换）；
+   隐藏时先淡出、160ms 后才 visibility:hidden（.mgcn-peek 侧延迟切换）。
+   元素仍占布局位（absolute/inline-flex），隐藏期间不可交互（visibility） */
+.mgcn-gear-wrap,
+.mgcn-count,
+.mgcn-pageUp,
+.mgcn-pageDown {
+  transition: opacity 160ms ease, visibility 0s;
+}
+.mgcn-peek {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 160ms ease, visibility 0s linear 160ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mgcn-gear-wrap,
+  .mgcn-count,
+  .mgcn-pageUp,
+  .mgcn-pageDown {
+    transition: none;
+  }
+}
+
+/* ---- 搜索浮层 ---- */
+.mgcn-search {
+  position: absolute;
+  top: -18px;             /* 面板与触发按钮垂直居中对齐 */
+  z-index: 62;
+  width: 300px;
+  box-sizing: border-box;   /* padding 计入宽度 */
+
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--mgcn-border, var(--dsw-alias-border-l2));
+  background: var(--mgcn-bg-raised, var(--dsw-alias-bg-layer-3));
+  box-shadow: var(--mgcn-shadow, var(--dsw-shadow-lv2));
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+  font-size: 12px;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+.mgcn-gear-wrap--right .mgcn-search {
+  right: calc(100% + 8px);
+  left: auto;
+}
+.mgcn-gear-wrap--left .mgcn-search {
+  left: calc(100% + 8px);
+  right: auto;
+}
+.mgcn-search-input {
+  width: 100%;
+  box-sizing: border-box;   /* 100% + padding/border 不再溢出面板 */
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--mgcn-border, var(--dsw-alias-border-l2));
+  background: var(--mgcn-bg, var(--dsw-alias-bg-layer-2));
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+  font-size: 12px;
+  outline: none;
+}
+.mgcn-search-input:focus {
+  border-color: var(--mgcn-highlight, var(--dsw-alias-brand-primary));
+}
+.mgcn-search-busy {
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+  font-size: 11px;
+}
+.mgcn-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.mgcn-search-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mgcn-fg-secondary, var(--dsw-alias-label-secondary));
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+}
+.mgcn-search-hit:hover {
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+}
+/* 标题行：轮次 + 时间 */
+.mgcn-search-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+}
+.mgcn-search-titleLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.mgcn-search-turn {
+  flex-shrink: 0;
+}
+.mgcn-search-titleTime {
+  font-weight: 400;
+}
+/* 正文行：角色 tag + 两行预览 */
+.mgcn-search-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+.mgcn-search-tag {
+  flex-shrink: 0;
+  margin-top: 1px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+}
+.mgcn-search-tag--user { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, transparent); color: var(--dsw-alias-state-business-primary); }
+.mgcn-search-tag--assistant { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 18%, transparent); color: var(--dsw-alias-brand-primary); }
+.mgcn-search-tag--tool { background: color-mix(in srgb, var(--dsw-alias-state-warning) 20%, transparent); color: var(--dsw-alias-state-warning); }
+.mgcn-search-text {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  line-height: 17px;
+}
+.mgcn-search-mark {
+  background: color-mix(in srgb, var(--mgcn-highlight, var(--dsw-alias-brand-primary)) 30%, transparent);
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+  border-radius: 2px;
+  padding: 0 1px;
+}
+/* 更早历史命中提示 */
+.mgcn-search-historic {
+  padding: 4px 4px 0;
+  font-size: 11px;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+}
+/* 按钮图标（currentColor 随主题） */
+.mgcn-btn-icon {
+  display: block;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+}
+.mgcn-config-gear:hover .mgcn-btn-icon {
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+}
+/* 配置面板分隔 */
+.mgcn-config-sep {
+  height: 1px;
+  background: var(--mgcn-border, var(--dsw-alias-border-l2));
+  margin: 2px 0;
+}
+/* 多选组（悬浮卡功能） */
+.mgcn-checkGroup {
+  display: flex;
+  gap: 10px;
+}
+.mgcn-checkItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+  cursor: pointer;
+  user-select: none;
+}
+.mgcn-checkItem input {
+  accent-color: var(--dsw-alias-brand-primary);
+}
+.mgcn-favFilterOn {
+  color: var(--dsw-alias-brand-primary) !important;
+}
+/* 滑块行（导航栏偏移） */
+.mgcn-sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mgcn-sliderRow input[type="range"] {
+  width: 120px;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+.mgcn-sliderValue {
+  font-size: 11px;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+  min-width: 28px;
+}
+/* ---- 手机模式：底部半宽搜索抽屉 ---- */
+.mgcn-drawerMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 90;
+}
+.mgcn-searchDrawer {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 70vh;
+  background: var(--mgcn-bg-raised, var(--dsw-alias-bg-layer-3));
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
+  padding: 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  z-index: 91;
+  animation: mgcnDrawerUp 240ms ease-out;
+}
+/* 全部轮次列表（不搜索时显示） */
+.mgcn-drawerList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+/* 抽屉 item：结构与样式对齐桌面搜索面板 item（.mgcn-search-hit） */
+.mgcn-drawerItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mgcn-fg-secondary, var(--dsw-alias-label-secondary));
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+}
+.mgcn-drawerItem:hover {
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+}
+.mgcn-drawerItemTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+}
+.mgcn-drawerItemTurn {
+  flex-shrink: 0;
+}
+.mgcn-drawerItemTime {
+  font-weight: 400;
+}
+.mgcn-drawerItemText {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  line-height: 17px;
+}
+@keyframes mgcnDrawerUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.mgcn-searchDrawer .mgcn-search {
+  position: static;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  flex: 1 1 auto;          /* 撑满抽屉，形成受限高度链 */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mgcn-searchDrawer .mgcn-search-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+/* ---- 手机模式：搜索按钮（注入滚动容器，inline sticky 定位；无 padding、带边框） ---- */
+.mgcn-mobileSearch {
+  padding: 3px;
+  border: 1px solid var(--mgcn-border, var(--dsw-alias-border-l2));
+  border-radius: 6px;
+  background: var(--mgcn-bg, var(--dsw-alias-bg-layer-2));
+  z-index: 60;
+  pointer-events: auto;
+}
+
+/* ==================== codex 风格：刻度轨（时间线式） ====================
+   轨道语言：每轮一个短横刻度（mark），锚定在轨道外侧（远离对话的一侧）
+   并朝对话方向展开；刻度静止短灰、hover 波纹本尊展开为长亮条、
+   向两侧逐级收短（±1/±2/±3）；阅读位置常亮、跳转目标品牌脉冲。
+   刻度色调 data-tone：soft=柔和（低对比）/ deep=深邃（高对比，默认）。
+   命名/变量全为 mgcn 体系内化。 */
+.mgcn-cxRail {
+  width: 46px;              /* 略宽于圆点轨：容纳刻度波纹展开 */
+}
+.mgcn-cxList {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  position: relative;
+  padding: 8px 0;
+  pointer-events: auto;
+}
+.mgcn-cxList::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* ---- 操作区与翻页提示对齐刻度列（刻度常态在 rail 外侧缘，锚点距边 7px + 半条 ≈ 13px；
+   操作按钮若居中于 rail 中轴会与短横刻度脱节、显得突兀——整体平移到刻度列中心。
+   左 rail：rail 中心 23px → 目标 13px（左移 10px）；右 rail 镜像 → 33px（右移 10px） ---- */
+.mgcn-cxRail .mgcn-actions,
+.mgcn-cxRail .mgcn-pageUp,
+.mgcn-cxRail .mgcn-pageDown {
+  margin-left: -10px;
+}
+.mgcn-cxRail.mgcn-railRight .mgcn-actions,
+.mgcn-cxRail.mgcn-railRight .mgcn-pageUp,
+.mgcn-cxRail.mgcn-railRight .mgcn-pageDown {
+  margin-left: 10px;
+}
+.mgcn-cxRail .mgcn-config-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+
+
+/* 刻度槽：整行可点（14px 行高，与圆点轨行距一致——翻页/跟读共用几何） */
+.mgcn-cxSlot {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 14px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 3px;
+}
+.mgcn-cxSlot:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -2px;
+}
+
+/* 刻度几何（公共层，与色调无关）：静止 12px / 阅读位 18px / hover 波纹 38px */
+.mgcn-cxRail {
+  --mgcn-cx-width-idle: 12px;
+  --mgcn-cx-width-current: 18px;
+  --mgcn-cx-width-hover: 38px;
+}
+/* 色调变量：仅颜色与不透明度按 data-tone 切换（deep 高对比，为默认） */
+.mgcn-cxRail[data-tone='soft'] {
+  --mgcn-cx-mark-bg: var(--dsw-alias-label-tertiary);
+  --mgcn-cx-mark-idle-op: 0.4;
+  --mgcn-cx-current-bg: var(--dsw-alias-label-primary);
+  --mgcn-cx-current-op: 0.7;
+  --mgcn-cx-ripple-bg: var(--dsw-alias-label-secondary);
+  --mgcn-cx-ripple-op: 0.75;
+}
+.mgcn-cxRail[data-tone='deep'] {
+  --mgcn-cx-mark-bg: var(--dsw-alias-label-secondary);
+  --mgcn-cx-mark-idle-op: 0.62;
+  --mgcn-cx-current-bg: var(--dsw-alias-brand-primary);
+  --mgcn-cx-current-op: 0.92;
+  --mgcn-cx-ripple-bg: var(--dsw-alias-label-primary);
+  --mgcn-cx-ripple-op: 0.88;
+}
+/* 兼容缺省（未设置 data-tone）：走深邃档 */
+.mgcn-cxRail:not([data-tone='soft']) {
+  --mgcn-cx-mark-bg: var(--dsw-alias-label-secondary);
+  --mgcn-cx-mark-idle-op: 0.62;
+  --mgcn-cx-current-bg: var(--dsw-alias-brand-primary);
+  --mgcn-cx-current-op: 0.92;
+  --mgcn-cx-ripple-bg: var(--dsw-alias-label-primary);
+  --mgcn-cx-ripple-op: 0.88;
+}
+
+/* 刻度条：锚定在外侧缘（rail 在对话左→锚左缘；右→锚右缘），朝对话方向展开 */
+.mgcn-cxMark {
+  position: absolute;
+  top: 50%;
+  width: var(--mgcn-cx-mark-w, var(--mgcn-cx-width-idle, 12px));
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 2px;
+  background: var(--mgcn-cx-mark-bg, var(--dsw-alias-label-secondary));
+  opacity: var(--mgcn-cx-mark-o, var(--mgcn-cx-mark-idle-op, 0.62));
+  transition: width 160ms cubic-bezier(0.22, 0.75, 0.18, 1), opacity 90ms ease-out, background 120ms ease-out;
+}
+.mgcn-rail:not(.mgcn-railRight) .mgcn-cxMark {
+  left: 7px;               /* rail 在对话左侧：刻度从左侧缘向右展开（朝对话） */
+  transform-origin: left center;
+}
+.mgcn-railRight .mgcn-cxMark {
+  right: 7px;              /* rail 在对话右侧：刻度从右侧缘向左展开（朝对话） */
+  transform-origin: right center;
+}
+/* 波纹邻居：较本尊淡一档（hover 级联为纯 CSS，JS 不再逐槽驱动） */
+.mgcn-cxSlot .mgcn-cxMark {
+  background: var(--mgcn-cx-mark-bg, var(--dsw-alias-label-secondary));
+}
+/* 阅读位置（current）：常亮品牌色、略长 */
+.mgcn-cxSlot.mgcn-cxCurrent .mgcn-cxMark {
+  width: var(--mgcn-cx-width-current, 18px);
+  background: var(--mgcn-cx-current-bg, var(--dsw-alias-brand-primary));
+  opacity: var(--mgcn-cx-current-op, 0.92);
+}
+/* hover/focus 波纹：本尊 38px 品牌实色；邻居逐级收短 30/21/15px——
+   纯 CSS 级联（:has 现代浏览器），hover 零 React 状态更新 */
+.mgcn-cxSlot:hover .mgcn-cxMark,
+.mgcn-cxSlot:focus-visible .mgcn-cxMark {
+  width: 38px;
+  background: var(--dsw-alias-brand-primary);
+  opacity: 1;
+}
+.mgcn-cxSlot:has(+ .mgcn-cxSlot:hover) .mgcn-cxMark,
+.mgcn-cxSlot:hover + .mgcn-cxSlot .mgcn-cxMark {
+  width: 30px;
+}
+.mgcn-cxSlot:has(+ .mgcn-cxSlot + .mgcn-cxSlot:hover) .mgcn-cxMark,
+.mgcn-cxSlot:hover + .mgcn-cxSlot + .mgcn-cxSlot .mgcn-cxMark {
+  width: 21px;
+}
+.mgcn-cxSlot:has(+ .mgcn-cxSlot + .mgcn-cxSlot + .mgcn-cxSlot:hover) .mgcn-cxMark,
+.mgcn-cxSlot:hover + .mgcn-cxSlot + .mgcn-cxSlot + .mgcn-cxSlot .mgcn-cxMark {
+  width: 15px;
+}
+/* 悬浮卡聚焦中的目标槽（JS focus 保活）：不随鼠标离开收回 */
+.mgcn-cxSlot.mgcn-cxFocused .mgcn-cxMark {
+  width: 38px;
+  background: var(--dsw-alias-brand-primary);
+  opacity: 1;
+}
+/* 跳转目标：品牌色脉冲闪光（600ms 后还原为阅读高亮） */
+.mgcn-cxSlot.mgcn-cxJump .mgcn-cxMark {
+  background: var(--dsw-alias-brand-primary);
+  opacity: 1;
+  animation: mgcn-cxPulse 600ms ease-in-out;
+}
+@keyframes mgcn-cxPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* 翻页入场的错峰滑入（与圆点轨同节奏，key 内联 delay 由列表组件给） */
+@keyframes mgcn-cxEnterFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  60% { opacity: 1; }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes mgcn-cxEnterFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  60% { opacity: 1; }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mgcn-cxEnterFromBottom { animation: mgcn-cxEnterFromBottom 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.mgcn-cxEnterFromTop { animation: mgcn-cxEnterFromTop 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@media (prefers-reduced-motion: reduce) {
+  .mgcn-cxEnterFromBottom,
+  .mgcn-cxEnterFromTop {
+    animation: none;
+  }
+}
+
+/* ==================== deepseek 风格：用户消息面板（JS 驱动展开） ====================
+   形态：常态 30px 窄轨（每轮行首 8×2 短横把手）；mouseenter/leave 由 JS 切换
+   .mgcn-dsOpen → rail 加宽到 280px 并浮现面板外观（不再用 CSS :hover）。
+   面板高度 = band 高度（queue 60% 居中 / band 档），不铺满 rail 全高。
+   面板头操作区独立一行；行 hover（JS）横线变收藏按钮。
+   交互守则：搜索就地态/设置浮层开启时，移出**不收起**——只有点击外部才关闭；
+   ⚙ 点击 → rail 收起窄轨（.mgcn-dsSnap 无过渡）并弹通用设置浮层（band 角锚点）。 */
+.mgcn-dsRail {
+  width: 30px;              /* 常态：窄把手轨 */
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  box-shadow: none;
+  /* 收拢方向延迟 140ms：先等面板头淡出完毕再收窄，窄轨布局变化不可见 */
+  transition: width 200ms cubic-bezier(0.22, 0.75, 0.18, 1) 140ms;
+}
+/* 展开方向不延迟：宽度先到位，面板头在其后(200ms 处)淡入 */
+.mgcn-dsRail.mgcn-dsOpen {
+  transition: width 200ms cubic-bezier(0.22, 0.75, 0.18, 1);
+}
+/* JS 展开态：宽度 280 + 层级抬升（背景画在 band 面板，避免整高背景） */
+.mgcn-dsRail.mgcn-dsOpen {
+  width: 280px;
+  z-index: 20;
+  /* （transition 见上方展开规则：不延迟宽度动画） */
+}
+/* band 布局：queue 60% 居中、list band 高 */
+.mgcn-dsRail .mgcn-queue {
+  max-height: 60%;
+  margin: auto 0;
+  width: 100%;
+}
+.mgcn-dsRail .mgcn-list {
+  max-height: min(var(--mgcn-band-height, 220px), 60vh);
+  width: 100%;
+}
+
+/* ---- 面板容器：head（操作区行）+ body 纵向排列 ---- */
+.mgcn-dsPanel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: auto;
+  background: transparent !important;      /* 折叠底子：防主题覆盖 */
+  border: 1px solid transparent !important;
+  border-radius: 12px;
+  box-shadow: none !important;
+  transition: background 160ms ease-out, border-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+.mgcn-dsOpen .mgcn-dsPanel {
+  background: var(--mgcn-bg-raised, var(--dsw-alias-bg-layer-3)) !important;
+  border-color: var(--mgcn-border, var(--dsw-alias-border-l2)) !important;
+  box-shadow: var(--mgcn-shadow, var(--dsw-shadow-lv2)) !important;
+}
+
+/* ---- 面板头：操作区独立一行（搜索 → 设置 → 收藏 → 计数） ---- */
+.mgcn-dsHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--mgcn-border, var(--dsw-alias-border-l2));
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 140ms ease-out, visibility 0s linear 140ms;
+}
+.mgcn-dsOpen .mgcn-dsHead {
+  opacity: 1;
+  visibility: visible;
+  /* 等 rail 宽度动画(200ms)完成后再淡入：窄轨展开初期 flex 无自由空间，
+     计数/操作钮被压向左侧；若立即显现会随宽度增长从左飞向右 */
+  transition: opacity 140ms ease-out 200ms, visibility 0s 200ms;
+}
+.mgcn-dsHead .mgcn-config-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 6px;
+}
+.mgcn-dsHead .mgcn-count {
+  margin-left: auto;
+  font-size: 12px;
+}
+.mgcn-dsHead .mgcn-dsModeOn {
+  color: var(--dsw-alias-brand-primary);
+}
+.mgcn-dsHead .mgcn-dsModeOn .mgcn-btn-icon {
+  color: var(--dsw-alias-brand-primary);
+}
+/* 搜索态：头部输入框占满操作区剩余空间 */
+.mgcn-dsSearchInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--mgcn-border, var(--dsw-alias-border-l2));
+  background: var(--mgcn-bg, var(--dsw-alias-bg-layer-2));
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+  font-size: 12px;
+  outline: none;
+}
+.mgcn-dsSearchInput:focus {
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+/* ---- 就地搜索模式容器：纵向 flex 约束（min-height:0 + overflow:hidden），
+       列表超长只在内层 .mgcn-dsList 就地滚动，不外溢 band ---- */
+.mgcn-dsMode {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---- 面板体：消息列表（行高 30px / 文字 14px） ---- */
+.mgcn-dsList {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  padding: 4px 0 8px;
+  pointer-events: auto;
+}
+.mgcn-dsList::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.mgcn-dsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 30px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* 折叠态（rail 未展开）：行内仅 mark，居中于窄轨 */
+.mgcn-dsRail:not(.mgcn-dsOpen) .mgcn-dsRow {
+  justify-content: center;
+  padding: 0;
+}
+/* JS 行 hover 高亮 */
+.mgcn-dsOpen .mgcn-dsRow.mgcn-dsRowHover {
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+}
+.mgcn-dsMark {
+  flex: none;
+  width: 8px;
+  height: 2px;
+  margin-left: 8px;
+  margin-right: 4px;
+  border-radius: 1px;
+  background: var(--dsw-alias-label-tertiary);
+  opacity: 0.9;
+  transition: background 120ms ease-out, opacity 120ms ease-out, width 120ms ease-out;
+}
+/* 行首收藏按钮（hover 行出现，替换 mark） */
+.mgcn-dsFav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  transition: color 120ms ease-out, background 120ms ease-out;
+}
+.mgcn-dsFav:hover {
+  color: var(--dsw-alias-brand-primary);
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+}
+.mgcn-dsFavOn {
+  color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-brand-primary));
+}
+/* 行文本按钮：占满剩余、可跳转 */
+.mgcn-dsText {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mgcn-dsText:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+.mgcn-dsTextInner {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  line-height: 30px;
+  margin-right: 8px;
+  color: var(--mgcn-fg-secondary, var(--dsw-alias-label-secondary));
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 140ms ease-out, visibility 0s linear 140ms;
+}
+.mgcn-dsOpen .mgcn-dsTextInner {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 140ms ease-out, visibility 0s;
+}
+.mgcn-dsOpen .mgcn-dsRow.mgcn-dsRowHover .mgcn-dsTextInner {
+  color: var(--mgcn-fg, var(--dsw-alias-label-primary));
+}
+/* 阅读位置行：短横业务蓝且略长（deepseek 用户消息语义色）
+   长横线去掉靠文本一侧的 margin-right（外缘 ml 沿用短横线 8px），
+   加长方向贴近文本、文本列位置不额外偏移 */
+.mgcn-dsRow.mgcn-dsCurrent .mgcn-dsMark {
+  background: var(--dsw-alias-state-business-primary);
+  opacity: 1;
+  width: 12px;
+  margin-right: 0;
+}
+/* 跳转目标：短横品牌脉冲 */
+.mgcn-dsRow.mgcn-dsJump .mgcn-dsMark {
+  background: var(--dsw-alias-brand-primary);
+  opacity: 1;
+  animation: mgcn-dsPulse 600ms ease-in-out;
+}
+@keyframes mgcn-dsPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ---- 就地搜索结果行 ---- */
+.mgcn-dsHit {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 6px;
+}
+.mgcn-dsHit:hover {
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+}
+.mgcn-dsHit .mgcn-dsMark {
+  margin-top: 9px;
+}
+.mgcn-dsHitBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mgcn-dsHitMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+}
+.mgcn-dsHitTag {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+  background: var(--mgcn-hover-bg, var(--dsw-alias-interactive-bg-hover));
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+}
+.mgcn-dsHitTag--user { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, transparent); color: var(--dsw-alias-state-business-primary); }
+.mgcn-dsHitTag--assistant { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 18%, transparent); color: var(--dsw-alias-brand-primary); }
+.mgcn-dsHitTag--tool { background: color-mix(in srgb, var(--dsw-alias-state-warning) 20%, transparent); color: var(--dsw-alias-state-warning); }
+.mgcn-dsHitText {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--mgcn-fg-secondary, var(--dsw-alias-label-secondary));
+}
+.mgcn-dsNoHit {
+  padding: 14px 10px;
+  font-size: 12px;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+  text-align: center;
+}
+
+/* ---- 搜索进行中：列表 loading 态（三点点动） ---- */
+.mgcn-dsLoadingRow {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+}
+.mgcn-dsLoadingRow .mgcn-dsLoadingDots {
+  display: inline-flex;
+  gap: 3px;
+}
+.mgcn-dsLoadingRow .mgcn-dsLoadingDots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary);
+  opacity: 0.35;
+  animation: mgcnHintDot 900ms ease-in-out infinite;
+}
+.mgcn-dsLoadingRow .mgcn-dsLoadingDots i:nth-child(2) { animation-delay: 150ms; }
+.mgcn-dsLoadingRow .mgcn-dsLoadingDots i:nth-child(3) { animation-delay: 300ms; }
+
+/* ---- 右停靠镜像：rail 在对话右侧 → 短横把手贴面板右缘、操作区镜像 ----
+   左停靠常态：行 = [短横 | 文本]，操作区靠面板左缘（与 rail 同侧）；
+   右停靠镜像：行 = [文本 | 短横]（flex-direction 反转），操作区靠右缘。 */
+.mgcn-dsRail.mgcn-railRight .mgcn-dsRow,
+.mgcn-dsRail.mgcn-railRight .mgcn-dsHit {
+  flex-direction: row-reverse;
+}
+/* 把手/收藏钮由 margin-left 改 margin-right（反转后贴右缘） */
+.mgcn-dsRail.mgcn-railRight .mgcn-dsMark {
+  margin-left: 4px;
+  margin-right: 8px;
+}
+/* 右停靠长横线（当前行）：去掉靠文本一侧的 margin-left，外缘 mr8 沿用 */
+.mgcn-dsRail.mgcn-railRight .mgcn-dsRow.mgcn-dsCurrent .mgcn-dsMark {
+  margin-left: 0;
+}
+.mgcn-dsRail.mgcn-railRight .mgcn-dsFav {
+  margin-left: 0;
+  margin-right: 4px;
+}
+/* 文本呼吸边同步镜像：文本内容区左缘内缩（原 margin-right 反转） */
+.mgcn-dsRail.mgcn-railRight .mgcn-dsTextInner {
+  margin-right: 0;
+  margin-left: 8px;
+}
+/* 命中行 mark 垂直偏移保留（行首 mark 现居右，对齐仍按行高） */
+.mgcn-dsRail.mgcn-railRight .mgcn-dsHit .mgcn-dsMark {
+  margin-top: 9px;
+}
+/* 面板头操作区镜像：搜索 → ⚙ → ⭐ 序列贴右缘，计数贴左缘 */
+.mgcn-dsRail.mgcn-railRight .mgcn-dsHead {
+  flex-direction: row-reverse;
+}
+.mgcn-dsRail.mgcn-railRight .mgcn-dsHead .mgcn-count {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+/* ---- 设置浮层（通用快捷设置面板，与 minimal/codex 同一实现） ----
+   点 ⚙ → rail 立即收起窄轨（.mgcn-dsSnap 关过渡、抬层级），设置面板挂在 band 盒
+   角上的 0×0 锚点（.mgcn-dsFloat），按停靠侧向对话区弹出；开启期间 hover 不展开，
+   只有点击外部 / 面板 ✕ 才关闭。 */
+.mgcn-dsRail.mgcn-dsSnap {
+  transition: none;
+  z-index: 30;
+}
+.mgcn-dsRail .mgcn-dsFloat {
+  position: absolute;   /* 0×0 锚点：.mgcn-dsPanel 同盒（band 顶角） */
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none; /* 锚点本身不接事件；面板内按钮照常 */
+}
+/* 停靠侧：右停靠 → 面板向左（对话侧）弹；左停靠 → 向右弹 */
+.mgcn-dsRail.mgcn-railRight .mgcn-dsFloat {
+  left: 0;
+  right: auto;
+}
+.mgcn-dsRail:not(.mgcn-railRight) .mgcn-dsFloat {
+  left: 100%;
+  right: auto;
+}
+.mgcn-dsFloat .mgcn-config-panel {
+  pointer-events: auto;
+}
+
+/* 手机抽屉顶部输入行 */
+.mgcn-drawerInput {
+  flex: none;
+  padding: 0 0 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mgcn-dsRail {
+    transition: none;
+  }
+}
