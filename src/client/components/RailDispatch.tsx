@@ -7,6 +7,7 @@ import type { NavInjected, SessionSelector, Translate } from './shared/types.ts'
 import { MinimalRail } from './minimal/MinimalRail.tsx'
 import { CodexRail } from './codex/CodexRail.tsx'
 import { DeepseekRail } from './deepseek/DeepseekRail.tsx'
+import { HarnessRail } from './harness/HarnessRail.tsx'
 
 export interface RailDispatchProps {
   injected: NavInjected | undefined
@@ -23,5 +24,6 @@ export function RailDispatch(props: RailDispatchProps): ReactNode {
   const railProps = { injected: props.injected, useSessions: props.useSessions, t: props.t }
   if (style === 'codex') return <CodexRail {...railProps} />
   if (style === 'deepseek') return <DeepseekRail {...railProps} />
+  if (style === 'harness') return <HarnessRail {...railProps} />
   return <MinimalRail {...railProps} />
 }

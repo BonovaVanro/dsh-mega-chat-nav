@@ -19,18 +19,20 @@ import { checkDshPolicy, dshCompatMessage, type DshCompatPolicy } from './compat
 export const name = 'dsh-mega-chat-nav'
 
 /**
- * 兼容策略（按需修改）：
- * - '= 0.1.1-*' = 支持 dsh-v0.1.1 整条预发布线（0.1.1-rc.1 / rc.2）；
- * - target 支持数组：命中任一即通过，如 ['0.1.1', '0.1.2-rc.1']；
- * - 关系约束示例：{ op: '>=', target: '0.1.1-rc.2' }。
+ * 兼容策略（0.1.2 分支：适配 dsh 0.1.1 之后、锁定 dsh-v0.1.2-rc.1）。
+ * - '= 0.1.2-rc.1' = 精确锁定 npm 已发布的 0.1.2-rc.1；
+ * - 本次范围**不含 0.1.2 其它预发布 / 0.1.3-alpha.1**（其插件相关 API 与 0.1.2-rc.1
+ *   逐字节相同，但按分支约定不在本次声明支持，遇到会给出不兼容警示）；
+ * - 0.1.1-* 维护线（0.1.1-rc.1 / 0.1.1-rc.2）由 0.1.1 分支负责。
  */
-const DSCH_COMPAT_POLICY: DshCompatPolicy = { op: '=', target: '0.1.1-*' }
+const DSCH_COMPAT_POLICY: DshCompatPolicy = { op: '=', target: '0.1.2-rc.1' }
 
 const dshRequire = createRequire(import.meta.url)
 
-/** 探测当前 dsh 版本：@deepseek-ai/dsh 本体 → dsh → dsh-client-runtime（与 tag 线 lockstep） */
+/** 探测当前 dsh 版本：优先 @deepseek-ai/dsh 本体，回退 lockstep 的 0.1.2 线包
+ *  （dsh-client-store / dsh-client-ui-renderer，取代已停发的 dsh-client-runtime）。 */
 function detectDshVersion(): string | null {
-  for (const pkg of ['@deepseek-ai/dsh', 'dsh', '@deepseek-ai/dsh-client-runtime']) {
+  for (const pkg of ['@deepseek-ai/dsh', 'dsh', '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-renderer']) {
     try {
       const pkgJson = dshRequire.resolve(pkg + '/package.json')
       const parsed = JSON.parse(readFileSync(pkgJson, 'utf8')) as { version?: string }

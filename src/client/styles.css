@@ -700,6 +700,54 @@
   left: calc(100% + 8px);
   right: auto;
 }
+/* ---- 无收藏提示（水平对齐收藏按钮同搜索浮层；垂直居中于按钮） ---- */
+/* ---- deepseek 无收藏提示（无边框半透明底，对齐收藏按钮下方居中） ---- */
+.mgcn-dsFavWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.mgcn-dsFavHint {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 63;
+  white-space: nowrap;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: none;                       /* deepseek 提示无边框 */
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 90%, transparent);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.mgcn-favHint {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 62;
+  white-space: nowrap;
+  box-sizing: border-box;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--mgcn-border, var(--dsw-alias-border-l2));
+  background: var(--mgcn-bg-raised, var(--dsw-alias-bg-layer-3));
+  box-shadow: var(--mgcn-shadow, var(--dsw-shadow-lv2));
+  color: var(--mgcn-fg-dim, var(--dsw-alias-label-tertiary));
+  font-size: 11px;
+  pointer-events: none;
+}
+.mgcn-gear-wrap--right .mgcn-favHint {
+  right: calc(100% + 8px);
+  left: auto;
+}
+.mgcn-gear-wrap--left .mgcn-favHint {
+  left: calc(100% + 8px);
+  right: auto;
+}
 .mgcn-search-input {
   width: 100%;
   box-sizing: border-box;   /* 100% + padding/border 不再溢出面板 */
@@ -724,12 +772,15 @@
   gap: 2px;
   max-height: 280px;
   overflow-y: auto;
+  align-items: stretch;
 }
 .mgcn-search-hit {
   display: flex;
   flex-direction: column;
   gap: 3px;
   width: 100%;
+  box-sizing: border-box;
+  flex: none;                    /* 结果容器内不被拉伸/压缩（防官方 flex 干扰） */
   padding: 6px 8px;
   border: none;
   border-radius: 8px;
@@ -737,6 +788,8 @@
   color: var(--mgcn-fg-secondary, var(--dsw-alias-label-secondary));
   text-align: left;
   font-size: 12px;
+  height: auto;                  /* 覆盖 0.1.2 官方 button 固定高度 */
+  line-height: 17px;             /* 显式行高：防 0.1.2 官方 button line-height reset 覆盖 */
   cursor: pointer;
 }
 .mgcn-search-hit:hover {
@@ -788,6 +841,7 @@
 .mgcn-search-text {
   flex: 1;
   min-width: 0;
+  display: block;                /* 0.1.2 官方可能覆盖 -webkit-box；block + clamp 备用 */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -950,6 +1004,7 @@
 .mgcn-searchDrawer .mgcn-search-results {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: none;      /* 抽屉内撑满可用空间（桌面浮层才保留 280px 上限） */
   overflow-y: auto;
   margin-top: 4px;
 }
@@ -1034,10 +1089,12 @@
 }
 /* 色调变量：仅颜色与不透明度按 data-tone 切换（deep 高对比，为默认） */
 .mgcn-cxRail[data-tone='soft'] {
-  --mgcn-cx-mark-bg: var(--dsw-alias-label-tertiary);
-  --mgcn-cx-mark-idle-op: 0.4;
-  --mgcn-cx-current-bg: var(--dsw-alias-label-primary);
-  --mgcn-cx-current-op: 0.7;
+  /* 柔和档：idle 与 current 长横线均跟随主题色（品牌色，低透明度柔和呈现）；
+     ripple 保持灰阶低对比 */
+  --mgcn-cx-mark-bg: var(--dsw-alias-brand-primary);
+  --mgcn-cx-mark-idle-op: 0.34;
+  --mgcn-cx-current-bg: var(--dsw-alias-brand-primary);
+  --mgcn-cx-current-op: 0.62;
   --mgcn-cx-ripple-bg: var(--dsw-alias-label-secondary);
   --mgcn-cx-ripple-op: 0.75;
 }
@@ -1083,6 +1140,16 @@
 .mgcn-cxSlot .mgcn-cxMark {
   background: var(--mgcn-cx-mark-bg, var(--dsw-alias-label-secondary));
 }
+/* 未加载历史回合（unloaded）：超短横线（官方 markUnloaded 同款：8px 短 + 低透明） */
+.mgcn-hsTick.mgcn-hsTickUnloaded .mgcn-hsTickBar {
+  width: 8px;
+  opacity: calc(var(--mgcn-hs-mark-idle-op, 0.62) * 0.85);
+}
+.mgcn-hsTick.mgcn-hsTickUnloaded:hover .mgcn-hsTickBar,
+.mgcn-hsTick.mgcn-hsTickUnloaded:focus-visible .mgcn-hsTickBar {
+  width: 18px;
+}
+
 /* 阅读位置（current）：常亮品牌色、略长 */
 .mgcn-cxSlot.mgcn-cxCurrent .mgcn-cxMark {
   width: var(--mgcn-cx-width-current, 18px);
@@ -1418,7 +1485,10 @@
   align-items: flex-start;
   gap: 10px;
   width: 100%;
+  box-sizing: border-box;
+  height: auto;              /* 覆盖 0.1.2 官方 button 固定高度（30px）——内容自适应撑开 */
   min-height: 30px;
+  flex: none;                /* 结果列表 flex 容器内不被压缩 */
   padding: 6px 10px;
   border: none;
   background: transparent;
@@ -1435,6 +1505,7 @@
 .mgcn-dsHitBody {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1577,4 +1648,179 @@
   .mgcn-dsRail {
     transition: none;
   }
+}
+
+/* ---- 隐藏 dsh 官方原生回合导航条（0.1.2 线新增的 TurnNavigator） ----
+   mega-chat-nav 点条与其功能重叠：插件启用时隐藏官方 rail（nav.frame 内为
+   scroller 刻度轨 + preview 悬浮卡 role=tooltip，如 eGxaPq_scroller /
+   eGxaPq_preview）。
+   CSS Modules 类名 = <hash>_<局部名>，hash 前缀（eGxaPq_ 等）随 dsh 构建变化、
+   局部名（frame/scroller）跨版本稳定——按语义后缀匹配，不硬编码 hash。 */
+nav[class*="_frame"][aria-label] {
+  display: none !important;
+}
+/* 结构兜底：若官方调整类名，按「nav 直接包含 turn scroller」隐藏 */
+nav:has(> [class*="_scroller"]) {
+  display: none !important;
+}
+
+/* ==================== harness 风格：复刻官方回合导航刻度轨（TurnNavigator） ====================
+   形态：窄刻度轨（每回合一个短横 tick，行距 10px 对齐官方节距），带内滚动 + 上下 fade；
+   增强（Codex 式）：hover 波纹展开（本尊 38px + 邻居 30/21/15 衰减）、current 常亮品牌色、
+   跳转目标品牌脉冲、收藏 tick 星标、soft/deep 色调档。 */
+.mgcn-hsRail {
+  width: 46px;
+}
+/* 操作区与翻页提示对齐刻度列（刻度锚 rail 外侧缘 7px + 半条 ≈ 13px；rail 中心 23px →
+   操作钮居中于刻度列 → 左移 10px；右 rail 镜像右移 10px）——同 codex */
+.mgcn-hsRail .mgcn-actions,
+.mgcn-hsRail .mgcn-pageUp,
+.mgcn-hsRail .mgcn-pageDown {
+  margin-left: -10px;
+}
+.mgcn-hsRail.mgcn-railRight .mgcn-actions,
+.mgcn-hsRail.mgcn-railRight .mgcn-pageUp,
+.mgcn-hsRail.mgcn-railRight .mgcn-pageDown {
+  margin-left: 10px;
+}
+.mgcn-hsRail .mgcn-config-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+.mgcn-hsList {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  position: relative;
+  padding: 6px 0;
+  pointer-events: auto;
+}
+.mgcn-hsList::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* 刻度槽：整行可点（行距 10px；刻度锚定外侧缘，朝对话方向展开） */
+.mgcn-hsTick {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 3px;
+}
+.mgcn-hsTick:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -2px;
+}
+
+/* 色调变量：仅颜色与不透明度按 data-tone 切换（deep 高对比为默认；soft 跟随主题色低对比） */
+.mgcn-hsRail[data-tone='soft'] {
+  --mgcn-hs-mark-bg: var(--dsw-alias-brand-primary);
+  --mgcn-hs-mark-idle-op: 0.34;
+  --mgcn-hs-current-bg: var(--dsw-alias-brand-primary);
+  --mgcn-hs-current-op: 0.62;
+  --mgcn-hs-ripple-bg: var(--dsw-alias-label-secondary);
+  --mgcn-hs-ripple-op: 0.75;
+}
+.mgcn-hsRail[data-tone='deep'],
+.mgcn-hsRail:not([data-tone='soft']) {
+  --mgcn-hs-mark-bg: var(--dsw-alias-label-secondary);
+  --mgcn-hs-mark-idle-op: 0.62;
+  --mgcn-hs-current-bg: var(--dsw-alias-brand-primary);
+  --mgcn-hs-current-op: 0.92;
+  --mgcn-hs-ripple-bg: var(--dsw-alias-label-primary);
+  --mgcn-hs-ripple-op: 0.88;
+}
+
+/* 刻度条：短横 tick（idle 短灰 → current 品牌常亮 → hover 波纹展开） */
+.mgcn-hsTickBar {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 2px;
+  background: var(--mgcn-hs-mark-bg, var(--dsw-alias-label-secondary));
+  opacity: var(--mgcn-hs-mark-idle-op, 0.62);
+  transition: width 160ms cubic-bezier(0.22, 0.75, 0.18, 1), opacity 90ms ease-out, background 120ms ease-out;
+}
+.mgcn-rail:not(.mgcn-railRight) .mgcn-hsTickBar {
+  left: 7px;
+  transform-origin: left center;
+}
+.mgcn-railRight .mgcn-hsTickBar {
+  right: 7px;
+  transform-origin: right center;
+}
+
+/* 收藏星标：刻度旁小星（favorited 显示） */
+.mgcn-hsTickStar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8px;
+  font-style: normal;
+  line-height: 1;
+  color: var(--dsw-alias-state-warning);
+  pointer-events: none;
+}
+.mgcn-rail:not(.mgcn-railRight) .mgcn-hsTickStar {
+  left: 22px;
+}
+.mgcn-railRight .mgcn-hsTickStar {
+  right: 22px;
+}
+
+/* 阅读位置（current）：常亮品牌色、略长 */
+.mgcn-hsTick.mgcn-hsCurrent .mgcn-hsTickBar {
+  width: 18px;
+  background: var(--mgcn-hs-current-bg, var(--dsw-alias-brand-primary));
+  opacity: var(--mgcn-hs-current-op, 0.92);
+}
+
+/* hover 波纹：本尊 38px 实色；邻居逐级收短 30/21/15px（纯 CSS :has 级联） */
+.mgcn-hsTick:hover .mgcn-hsTickBar,
+.mgcn-hsTick:focus-visible .mgcn-hsTickBar {
+  width: 38px;
+  background: var(--mgcn-hs-ripple-bg, var(--dsw-alias-label-primary));
+  opacity: var(--mgcn-hs-ripple-op, 0.88);
+}
+.mgcn-hsTick:hover ~ .mgcn-hsTick .mgcn-hsTickBar {
+  width: 30px;
+  opacity: calc(var(--mgcn-hs-ripple-op, 0.88) * 0.72);
+}
+.mgcn-hsTick:hover ~ .mgcn-hsTick ~ .mgcn-hsTick .mgcn-hsTickBar {
+  width: 21px;
+  opacity: calc(var(--mgcn-hs-ripple-op, 0.88) * 0.52);
+}
+.mgcn-hsTick:hover ~ .mgcn-hsTick ~ .mgcn-hsTick ~ .mgcn-hsTick .mgcn-hsTickBar {
+  width: 15px;
+  opacity: calc(var(--mgcn-hs-ripple-op, 0.88) * 0.36);
+}
+.mgcn-hsTick:hover ~ .mgcn-hsTick ~ .mgcn-hsTick ~ .mgcn-hsTick ~ .mgcn-hsTick .mgcn-hsTickBar {
+  width: 12px;
+  opacity: calc(var(--mgcn-hs-ripple-op, 0.88) * 0.24);
+}
+
+/* 跳转目标：品牌脉冲 */
+.mgcn-hsTick.mgcn-hsJumping .mgcn-hsTickBar {
+  animation: mgcn-hsPulse 600ms ease-in-out 2;
+}
+@keyframes mgcn-hsPulse {
+  0%, 100% { opacity: var(--mgcn-hs-ripple-op, 0.88); transform: scaleX(1); }
+  50% { opacity: 1; transform: scaleX(1.25); }
+}
+
+/* 列表 fade（滚动边缘渐变，官方同款 mask） */
+.mgcn-hsList {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
 }

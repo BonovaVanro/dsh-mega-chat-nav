@@ -58,7 +58,12 @@ export function SettingsPage(props: SettingsPageProps): ReactNode {
         <Seg
           options={STYLE_OPTIONS}
           value={injected.style()}
-          labels={{ minimal: t('config.style.minimal'), codex: t('config.style.codex'), deepseek: t('config.style.deepseek') }}
+          labels={{
+            minimal: t('config.style.minimal'),
+            codex: t('config.style.codex'),
+            deepseek: t('config.style.deepseek'),
+            harness: t('config.style.harness'),
+          }}
           onPick={(v) => injected.setStyle(v)}
         />
       </Field>

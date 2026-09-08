@@ -111,7 +111,14 @@ function readBody(req: unknown): Promise<string> {
 
 interface SessionsLike { get(id: string): { events?: readonly unknown[] } | undefined }
 interface PersistenceLike { readRaw(id: string): unknown }
-interface QueryLike { readSession(id: string): { events?: readonly unknown[] } }
+/** 0.1.2 线：sessionQuery 服务的 observeSession（live 优先 + 持久化冷读合并） */
+interface QueryLike {
+  observeSession(id: string, opts?: { projectionMode?: 'all' | 'none'; signal?: AbortSignal }): Promise<{
+    events?: readonly unknown[]
+    dispose?(): void
+    [Symbol.dispose]?(): void
+  } | undefined>
+}
 
 /** 事件 + 来源标注 */
 interface SourcedEvent {
@@ -124,12 +131,28 @@ interface SourcedEvent {
  * 读取会话事件：合并「已加载窗口」（live）与「更早历史」（持久化日志 →
  * sessionQuery 兜底），按 seq 去重（历史中与 live 重复的丢弃），整体按 seq 排序。
  */
-function readEventSources(
+/** 0.1.2 线事件读取：优先官方 sessionQuery.observeSession（live + 持久化冷读合并），
+ *  失败/缺失时降级 0.1.1 旧路径（live events + persistence.readRaw + query.readSession）。 */
+async function readEventSources(
   sessionId: string,
   sessions: SessionsLike | undefined,
   persistence: PersistenceLike | undefined,
   query: QueryLike | undefined,
-): SourcedEvent[] {
+  signal?: AbortSignal,
+): Promise<SourcedEvent[]> {
+  if (query !== undefined) {
+    try {
+      const observed = await query.observeSession(sessionId, { projectionMode: 'none', signal })
+      if (observed !== undefined && Array.isArray(observed.events) && observed.events.length > 0) {
+        const events = observed.events as unknown as readonly EventLike[]
+        try { observed[Symbol.dispose]?.() } catch { /* 释放观察租约 */ }
+        return events.map((ev) => ({ ev, historic: false }))
+      }
+      try { observed?.[Symbol.dispose]?.() } catch { /* ignore */ }
+    } catch {
+      /* 降级旧路径 */
+    }
+  }
   const live = (sessions?.get(sessionId)?.events ?? []) as unknown as EventLike[]
   const liveSeqs = new Set<number>()
   for (const ev of live) {
@@ -141,7 +164,8 @@ function readEventSources(
     if (Array.isArray(raw)) historic = raw as unknown as EventLike[]
   } catch { /* 下一级 */ }
   if (historic.length === 0) {
-    const q = query?.readSession(sessionId)
+    // 0.1.1 遗留：sessionQuery.readSession 已不存在，宽松调用兜底（0.1.2 实际走 observeSession）
+    const q = (query as unknown as { readSession?(id: string): { events?: readonly unknown[] } })?.readSession?.(sessionId)
     if (q && Array.isArray(q.events)) historic = q.events as unknown as EventLike[]
   }
   const out: SourcedEvent[] = live.map((ev) => ({ ev, historic: false }))
@@ -208,11 +232,12 @@ export function searchEvents(events: readonly SourcedEvent[], q: string, limit: 
 }
 
 export function registerSearchRoute(ctx: Context): void {
-  ctx.inject(['webServer', 'sessions'], (scoped) => {
+  ctx.inject(['webServer', 'sessions', 'sessionQuery'], (scoped) => {
     const webServer = (scoped as unknown as {
       webServer?: { register(opts: { kind: 'prefix'; path: string; handler(req: unknown, res: unknown): Promise<void> | void }): unknown }
     }).webServer
     const sessions = (scoped as unknown as { sessions?: SessionsLike }).sessions
+    const sessionQuery = (scoped as unknown as { sessionQuery?: QueryLike }).sessionQuery
     if (!webServer || !sessions) return
     ctx.inject(['settings'], (settingsCtx) => {
       const settingsService = (settingsCtx as unknown as {
@@ -275,8 +300,7 @@ export function registerSearchRoute(ctx: Context): void {
             const cached = searchCache.get(cacheKey)
             if (cached) { write(200, { ok: true, ...cached }); return }
             const persistence = tryGet(() => (scoped as unknown as { sessionPersistence?: PersistenceLike }).sessionPersistence)
-            const query = tryGet(() => (scoped as unknown as { sessionQuery?: QueryLike }).sessionQuery)
-            const result = searchEvents(readEventSources(sessionId, sessions, persistence, query), q, limit, scopes)
+            const result = searchEvents(await readEventSources(sessionId, sessions, persistence, sessionQuery), q, limit, scopes)
             searchCache.set(cacheKey, result)
             write(200, { ok: true, ...result })
           } catch (e) {

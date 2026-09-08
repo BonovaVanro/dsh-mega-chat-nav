@@ -13,10 +13,11 @@
  * @module dsh-mega-chat-nav/client/settings
  */
 
-import type { SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec } from '@deepseek-ai/dsh-client-runtime/client'
+// 0.1.2 线：SettingsScope 契约从已停发的 dsh-client-runtime 移到 dsh-client-ui-settings
+import type { SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec } from '@deepseek-ai/dsh-client-ui-settings/client'
 
-/** 风格选项：简约 / codex（时间线刻度）/ deepseek（用户消息面板，常态短横折叠） */
-export const STYLE_OPTIONS = ['minimal', 'codex', 'deepseek'] as const
+/** 风格选项：简约 / codex（时间线刻度）/ deepseek（用户消息面板）/ harness（复刻官方回合导航刻度轨） */
+export const STYLE_OPTIONS = ['minimal', 'codex', 'deepseek', 'harness'] as const
 export type NavStyle = typeof STYLE_OPTIONS[number]
 
 /** 停靠侧选项 */
@@ -40,6 +41,7 @@ export const DEFAULT_PAGING: Record<NavStyle, ShowMode> = {
   minimal: 'show',
   codex: 'hide',
   deepseek: 'peek',
+  harness: 'hide',
 }
 
 /** 搜索内容范围（多选；用户必选） */
@@ -56,6 +58,7 @@ export const DEFAULT_CARD_COUNT: Record<NavStyle, CardCount> = {
   minimal: 3,
   codex: 1,
   deepseek: 1,
+  harness: 3,
 }
 
 /** 悬浮卡内容块（多选） */
@@ -81,6 +84,7 @@ export const BAND_HEIGHT_PX: Record<NavStyle, Record<BandHeight, number>> = {
   minimal: { compact: 144, standard: 204, tall: 274 },
   codex: { compact: 140, standard: 210, tall: 280 },
   deepseek: { compact: 160, standard: 220, tall: 280 },
+  harness: { compact: 140, standard: 210, tall: 280 },
 }
 
 /** 风格能力：各风格声明自己的可选能力（组件与设置面据此取舍） */
@@ -96,6 +100,7 @@ export const STYLE_CAPABILITIES: Record<NavStyle, StyleCapabilities> = {
   minimal: { hoverCards: true, paging: true },
   codex: { hoverCards: true, paging: true },
   deepseek: { hoverCards: false, paging: false },
+  harness: { hoverCards: true, paging: true },
 }
 
 /** 本插件设置命名空间 */

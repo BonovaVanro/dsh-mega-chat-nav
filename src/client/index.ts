@@ -17,13 +17,19 @@
  * Failure policy: nothing here throws at apply time — an external plugin must
  * never take the GUI down.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context } from '@deepseek-ai/cordis'
+// Type-only: pulls the slots service Context merge (ctx.slots) — 0.1.2 线由拆分后的
+// dsh-client-ui-renderer 提供（原 dsh-client-runtime 已停发）。
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the settings shell's SlotMap merge ('settings.plugins.tab')
 // and the ctx.settingsScope Context merge.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SettingsScopeBinder } from '@deepseek-ai/dsh-client-ui-settings/client'
+
+/** 0.1.2 线 client 上下文 = cordis Context（runtime 拆分后不再有 ClientContext 别名）。 */
+type ClientContext = Context
 import { RailDispatch } from './components/RailDispatch.tsx'
 import { SettingsPage } from './components/settings/SettingsPage.tsx'
 import { StandaloneSettings } from './components/settings/StandaloneSettings.tsx'
@@ -35,10 +41,16 @@ import { goTo, type JumpFailureCode, type JumpPorts, type JumpSnapshot } from '.
 /** Locale namespace this plugin owns. */
 const NS = 'mega-chat-nav'
 
-/** Services required by this plugin. */
-export const inject = ['slots', 'locale', 'sessions']
+/** Services required by this plugin.
+ *  - slots / locale：官方服务（0.1.2 线 slots 由 ui-renderer 提供）；
+ *  - sessions：api-session-controller 提供（binding/list/projections 契约不变）；
+ *  - uiConversation：ui-conversation 提供——活窗口对话行快照源（chat target）。
+ *    cordis Service 属性访问须在 inject 声明，否则抛 "cannot get property without inject"。 */
+export const inject = ['slots', 'locale', 'sessions', 'uiConversation']
 
-/** 会话服务最小面（rc 类型面不全，此处宽松化） */
+/** 会话服务最小面（rc 类型面不全，此处宽松化）。
+ *  0.1.2 线：ctx.sessions 由 @deepseek-ai/dsh-api-session-controller 提供，
+ *  binding()/list/projections 契约不变（hostFace().sessions 才是被移除的那个）。 */
 interface SessionsFace {
   binding(sessionId: string): { session: SessionFace } | undefined
   list: { subscribe(cb: () => void): () => void }
@@ -132,7 +144,7 @@ function jumpPortsFor(ctx: ClientContext, sessionId: string): JumpPorts {
         openState: snap.openState ?? '',
         hasMore: snap.hasMore ?? false,
         loadingOlder: snap.loadingOlder ?? false,
-        rows: (snap.chat?.nodes?.values() ?? []) as unknown as JumpSnapshot['rows'],
+        rows: chatRowsOf(ctx, sessionId) as unknown as JumpSnapshot['rows'],
       }
     },
     loadMore: async () => {
@@ -232,6 +244,97 @@ function jumpPortsFor(ctx: ClientContext, sessionId: string): JumpPorts {
 }
 
 /**
+ * 0.1.2 线对话 chat 快照最小面（结构型，非 SDK 绑定）。
+ * 0.1.1 的 SessionSnapshot.chat（聊天行）在 0.1.2 线被移除：会话快照不再携带
+ * 可见行数据，改由 ui-conversation 的 per-session chat target 快照提供——
+ * ctx.uiConversation.binding(sessionId).target('chat')。
+ * 缺包 / 未就绪 / 结构不符时一律优雅降级为空，不影响投影主路径。
+ */
+/** 0.1.2 线聊天行源的最小结构面（view node / legacy record 两者字段并集） */
+interface ChatRowSourceLike {
+  key?: unknown
+  anchorSeq?: unknown
+  visibility?: unknown
+  kind?: unknown
+  seq?: number
+  data?: unknown
+}
+
+interface ChatSnapshotLike {
+  /** 0.1.2 线 chat target 快照（ui-chat ChatSnapshot 结构面）：nodes 为逐 key 行存储 */
+  nodes?: { values(): readonly unknown[] }
+  /** 兼容旧字段的 legacy 行数组（ConversationNode 记录；无 key，用 seq 兜底） */
+  legacy?: { nodes?: readonly unknown[] }
+  /** 已加载回合导航索引（官方 turn rail 用；窗口外回合 → unloaded） */
+  navigation?: { items(): readonly { turn: number }[] }
+}
+
+interface UiConversationLike {
+  binding(sessionId: string): {
+    target(name: string): {
+      getSnapshot(): ChatSnapshotLike | undefined
+      subscribe(cb: () => void): () => void
+    }
+  } | undefined
+}
+
+/** 0.1.2 线 chat target 最小面；结构缺失 / 抛错时返回 undefined（降级投影主路径）。
+ *  uiConversation 已在 inject 声明（cordis 服务属性访问需 inject；官方 ui-chat 同款）。 */
+function chatFaceOf(ctx: ClientContext, sessionId: string): {
+  getSnapshot(): ChatSnapshotLike | undefined
+  subscribe(cb: () => void): () => void
+} | undefined {
+  const ui = (ctx as unknown as { uiConversation?: UiConversationLike }).uiConversation
+  if (ui === undefined) return undefined
+  try {
+    return ui.binding(sessionId)?.target('chat')
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 当前会话窗口内的聊天行（0.1.2 线：ui-conversation chat target；0.1.1 线：
+ * session 快照 chat.nodes——防御性保留，0.1.2 分支实际走前者）。
+ */
+function chatRowsOf(ctx: ClientContext, sessionId: string): ChatRowLike[] {
+  const chat = chatFaceOf(ctx, sessionId)
+  if (chat !== undefined) {
+    try {
+      const snap = chat.getSnapshot()
+      if (snap !== undefined) {
+        // 0.1.2 线 chat 快照的 nodes（ChatNodeStore）与 legacy.nodes 是同一批
+        // 节点的两个视图——只取一个源，避免每行重复（view node 的 key 与投影
+        // anchorKey 一致可被 buildMarkers 去重；legacy 的 seq 兜底 key 去重不了）。
+        const viewNodes = (snap.nodes?.values?.() ?? []) as readonly ChatRowSourceLike[]
+        const sourceNodes = viewNodes.length > 0
+          ? viewNodes
+          : ((snap.legacy?.nodes ?? []) as readonly ChatRowSourceLike[])
+        const rows: ChatRowLike[] = []
+        for (const node of sourceNodes) {
+          const kind = node.kind
+          if (kind !== 'user' && kind !== 'steering') continue
+          rows.push({
+            key: typeof node.key === 'string' ? node.key : 'seq:' + (node.seq ?? 0),
+            anchorSeq: typeof node.anchorSeq === 'number' ? node.anchorSeq : (node.seq ?? 0),
+            visibility: typeof node.visibility === 'string' ? node.visibility : undefined,
+            kind,
+            // view node：data 为 UserMessageNode 记录；legacy node：节点自身即记录
+            data: (typeof node.data === 'object' && node.data !== null ? node.data : node) as RowPayload,
+          })
+        }
+        return rows
+      }
+    } catch {
+      /* 降级 */
+    }
+  }
+  const snap = sessionsOf(ctx).binding(sessionId)?.session.getSnapshot()
+  if (snap === undefined || snap.chat?.nodes === undefined) return []
+  return [...(snap.chat.nodes.values() as unknown as Iterable<ChatRowLike>)]
+}
+
+/**
  * The session's `msgNavMessages` projection face (getSnapshot + subscribe).
  * Undefined when the session is not bound or the host unit is not registered
  * (e.g. a headless composition) — the strip then shows live-window dots only.
@@ -248,18 +351,30 @@ function navProjectionOf(ctx: ClientContext, sessionId: string): ObservableFace 
 function createInject(ctx: ClientContext, settings: NavSettingsController): NavInjected {
   const sessions = sessionsOf(ctx)
   return {
-    readQuestions: (sessionId) => {
-      const snap = sessions.binding(sessionId)?.session.getSnapshot()
-      if (snap === undefined || snap.chat?.nodes === undefined) return []
-      return extractQuestionRows(snap.chat.nodes.values() as unknown as Iterable<ChatRowLike>)
-    },
+    readQuestions: (sessionId) => extractQuestionRows(chatRowsOf(ctx, sessionId)),
     subscribeList: (cb) => sessions.list.subscribe(cb),
     subscribeContent: (sessionId, cb) => {
+      // 会话生命周期变更 + 0.1.2 线对话行变更（chat target）双订阅；
+      // 任一变化都触发内容重读（投影主路径 + 活窗口兜底）
       const binding = sessions.binding(sessionId)
-      if (binding === undefined) return () => {}
-      return binding.session.subscribe(cb)
+      const chat = chatFaceOf(ctx, sessionId)
+      const subs: (() => void)[] = []
+      if (binding !== undefined) subs.push(binding.session.subscribe(cb))
+      if (chat !== undefined) subs.push(chat.subscribe(cb))
+      if (subs.length === 0) return () => {}
+      return () => { for (const off of subs) off() }
     },
     questionProjection: (sessionId) => navProjectionOf(ctx, sessionId),
+    navLoadedTurns: (sessionId) => {
+      const chat = chatFaceOf(ctx, sessionId)
+      const items = chat?.getSnapshot?.()?.navigation?.items?.() ?? []
+      return new Set(items.map((item) => item.turn))
+    },
+    subscribeNavLoadedTurns: (sessionId, cb) => {
+      const chat = chatFaceOf(ctx, sessionId)
+      if (chat === undefined) return () => {}
+      return chat.subscribe(cb)
+    },
     jump: (sessionId, key, seq, currentSeq) => {
       const ports = jumpPortsFor(ctx, sessionId)
       ports.report = (code: JumpFailureCode) => {
@@ -345,7 +460,8 @@ export function apply(ctx: ClientContext): void {
   }, SettingsPage))
 
   // 插件页配置入口：仅当未被 mega-settings 收纳时注册（收纳后注销，避免重复入口）。
-  // mega-settings 可能晚于本插件加载——注册后订阅 member 条目，宿主出现即注销。
+  // mega-settings 可能晚于本插件加载——用 inject 等待官方 settings.plugins.tab 声明（0.1.2 线
+  // 声明时机不保证早于本插件），并订阅 member 条目，宿主出现即注销。
   {
     let tabDispose: (() => void) | null = null
     const ensurePluginsTab = (): void => {
@@ -354,14 +470,17 @@ export function apply(ctx: ClientContext): void {
         tabDispose?.()
         tabDispose = null
       } else if (tabDispose === null) {
-        tabDispose = ctx.slots.register({
+        // 0.1.2 线：settings.plugins.tab 由官方 ui-settings-plugins 在自身 apply 时声明，
+        // 可能晚于本插件——改用 inject 等待声明（声明存在则同步注册），
+        // 避免对未声明槽位直接 register 触发 load-time 校验失败。
+        tabDispose = ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
           name: 'settings.plugins.tab',
           id: 'mega-chat-nav',
           order: 100,
           label: () => t('label'),
           locale: NS,
           inject: () => ({ injected, slots: ctx.slots }),
-        }, StandaloneSettings)
+        }, StandaloneSettings))
       }
     }
     ensurePluginsTab()

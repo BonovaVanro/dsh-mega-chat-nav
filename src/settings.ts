@@ -10,7 +10,7 @@ import z from '@deepseek-ai/schemastery'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 
 /** 风格选项：简约 / codex（时间线刻度）/ deepseek（用户消息面板，常态短横折叠） */
-export const STYLE_OPTIONS = ['minimal', 'codex', 'deepseek'] as const
+export const STYLE_OPTIONS = ['minimal', 'codex', 'deepseek', 'harness'] as const
 export type NavStyle = typeof STYLE_OPTIONS[number]
 
 /** 停靠侧选项 */
@@ -34,6 +34,7 @@ export const DEFAULT_PAGING: Record<NavStyle, ShowMode> = {
   minimal: 'show',
   codex: 'hide',
   deepseek: 'peek',
+  harness: 'hide',
 }
 
 /** 搜索内容范围（多选；用户必选） */
@@ -50,6 +51,7 @@ export const DEFAULT_CARD_COUNT: Record<NavStyle, CardCount> = {
   minimal: 3,
   codex: 1,
   deepseek: 1,
+  harness: 3,
 }
 
 /** 悬浮卡内容块（多选） */
@@ -111,6 +113,7 @@ export interface NavStyleSettings {
   minimal: StyleSettings
   codex: StyleSettings
   deepseek: StyleSettings
+  harness: StyleSettings
 }
 
 /** 持久化设置文档结构 */
@@ -149,6 +152,7 @@ const StyleDefaults: Record<NavStyle, { cardCount: CardCount; showPaging: ShowMo
   minimal: { cardCount: DEFAULT_CARD_COUNT.minimal, showPaging: DEFAULT_PAGING.minimal },
   codex: { cardCount: DEFAULT_CARD_COUNT.codex, showPaging: DEFAULT_PAGING.codex },
   deepseek: { cardCount: DEFAULT_CARD_COUNT.deepseek, showPaging: DEFAULT_PAGING.deepseek },
+  harness: { cardCount: DEFAULT_CARD_COUNT.harness, showPaging: DEFAULT_PAGING.harness },
 }
 const styleSchemaFields = (style: NavStyle) => ({
   cardCount: z.union([...CARD_OPTIONS]).default(StyleDefaults[style].cardCount),
@@ -162,6 +166,7 @@ export const NavSettingsSchema: z<NavSettings> = z.object({
     minimal: z.object({ ...StyleFields, ...styleSchemaFields('minimal') }),
     codex: z.object({ ...StyleFields, ...styleSchemaFields('codex') }),
     deepseek: z.object({ ...StyleFields, ...styleSchemaFields('deepseek') }),
+    harness: z.object({ ...StyleFields, ...styleSchemaFields('harness') }),
   }),
 })
 

@@ -31,6 +31,10 @@ export interface NavInjected {
   subscribeList: (cb: () => void) => () => void
   subscribeContent: (sessionId: string, cb: () => void) => () => void
   questionProjection: (sessionId: string) => ObservableFace | undefined
+  /** 已加载回合集合（chat 窗口内；窗口外回合为 unloaded 短横线）。session 无效返回空集 */
+  navLoadedTurns: (sessionId: string) => ReadonlySet<number>
+  /** 订阅已加载回合集合变化（chat 窗口加载扩展时刷新） */
+  subscribeNavLoadedTurns: (sessionId: string, cb: () => void) => () => void
   /** seq：目标轮序号（方向判定）；currentSeq：当前阅读位置序号（可选，下方判定优先用） */
   jump: (sessionId: string, key: string, seq?: number, currentSeq?: number) => void
   style: () => NavStyle

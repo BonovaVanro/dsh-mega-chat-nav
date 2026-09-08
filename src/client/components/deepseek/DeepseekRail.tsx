@@ -123,10 +123,18 @@ export function DeepseekRail(props: RailProps): ReactNode {
   const listRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)          // JS hover 展开态（不用 CSS :hover）
-  const [jumpingKey, setJumpingKey] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [jumpingKey, setJumpingKey] = useState<string | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
   const [favFilter, setFavFilter] = useState(false)
+  // 无收藏提示（点击收藏按钮且无条目时，短暂弹出；无边框轻提示）
+  const [favHint, setFavHint] = useState(false)
+  const favHintTimer = useRef<number | null>(null)
+  const showNoFavHint = (): void => {
+    setFavHint(true)
+    if (favHintTimer.current !== null) window.clearTimeout(favHintTimer.current)
+    favHintTimer.current = window.setTimeout(() => { setFavHint(false); favHintTimer.current = null }, 1800)
+  }
   const [hoverKey, setHoverKey] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const closeTimer = useRef<number | null>(null)
@@ -468,17 +476,20 @@ export function DeepseekRail(props: RailProps): ReactNode {
                   </button>
                 ) : null}
                 {!searchOpen && settings.showFavorites !== 'hide' ? (
-                  <button
-                    type="button"
-                    className={effectiveFilter ? 'mgcn-config-gear mgcn-favFilterOn' : 'mgcn-config-gear'}
-                    aria-label={t('fav.filter')}
-                    onClick={() => { if (favorites.size > 0) setFavFilter((v) => !v) }}
-                  >
-                    <svg className="mgcn-btn-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                      <path d="M8 2.2l1.76 3.56 3.93.57-2.84 2.77.67 3.91L8 11.4l-3.52 1.85.67-3.91-2.84-2.77 3.93-.57z"
-                        fill={favFilter ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                  <span className="mgcn-dsFavWrap">
+                    <button
+                      type="button"
+                      className={effectiveFilter ? 'mgcn-config-gear mgcn-favFilterOn' : 'mgcn-config-gear'}
+                      aria-label={t('fav.filter')}
+                      onClick={() => { if (favorites.size > 0) setFavFilter((v) => !v); else showNoFavHint() }}
+                    >
+                      <svg className="mgcn-btn-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                        <path d="M8 2.2l1.76 3.56 3.93.57-2.84 2.77.67 3.91L8 11.4l-3.52 1.85.67-3.91-2.84-2.77 3.93-.57z"
+                          fill={favFilter ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    {favHint ? <span className="mgcn-dsFavHint">{t('strip.noFavorites')}</span> : null}
+                  </span>
                 ) : null}
                 {!searchOpen && settings.showCount !== 'hide' ? (
                   <span className="mgcn-count">{displayMarkers.length}</span>

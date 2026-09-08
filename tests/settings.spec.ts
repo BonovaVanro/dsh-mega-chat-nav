@@ -1,6 +1,6 @@
 // 设置控制器测试：嵌套配置（general + styles.minimal）的读取/回退/写入
 import { describe, expect, it } from 'vitest'
-import type { SettingsScopeSnapshot, SettingsScopeSpec } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SettingsScopeSnapshot, SettingsScopeSpec } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { NavSettingsController, ALIGN_OPTIONS, BAND_OPTIONS, SCROLL_OPTIONS, DEFAULT_ALIGN, DEFAULT_BAND, DEFAULT_CARD_COUNT, DEFAULT_SCROLL, MGCN_NS, type SettingsScopeBinderLike } from '../src/client/settings.ts'
 import type { BandHeight, RailAlign, ScrollMode } from '../src/client/settings.ts'
 

@@ -12,6 +12,8 @@
     "rewriteRelativeImportExtensions": true,
     "jsx": "react-jsx",
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
     "types": ["node"]
   },

@@ -904,3 +904,24 @@ export function useMobileSearchButton(onClick: () => void, enabled: boolean, ali
     }
   }, [enabled, onClick, align, label])
 }
+
+/** 跳转动作 + 脉冲态（四风格共用）：返回 [jumpingKey, jump]。
+ *  jump(marker)：跳转 + 目标脉冲 + 阅读位强制激活。 */
+export function useRailJump(
+  sessionId: string | undefined,
+  injected: NavInjected | undefined,
+  displayMarkers: readonly RailMarker[],
+  currentKey: string | null,
+  forceKey: (key: string) => void,
+): [string | null, (marker: RailMarker) => void] {
+  const [jumpingKey, setJumpingKey] = useState<string | null>(null)
+  const jump = (marker: RailMarker): void => {
+    if (sessionId === undefined || injected === undefined) return
+    setJumpingKey(marker.key)
+    forceKey(marker.key)   // 点击瞬间强制激活目标（正文滚动稳定后由采样判据接管）
+    const currentMarker = currentKey === null ? undefined : displayMarkers.find((m) => m.key === currentKey)
+    injected.jump(sessionId, marker.key, marker.seq, currentMarker?.seq)
+    window.setTimeout(() => setJumpingKey((k) => (k === marker.key ? null : k)), 600)
+  }
+  return [jumpingKey, jump]
+}

@@ -126,7 +126,6 @@ async function scrollLocate(
     const step = Math.max(200, Math.round(port.clientHeight * 0.4))
     port.scrollBy({ top: dir * step })
     await ports.sleep(stepMs)
-    const floor = Math.max(0, port.scrollHeight - port.clientHeight)
     if (Math.abs(port.scrollTop - before) < 2) {
       // 到边界：反向回扫若干步（虚拟渲染滞后可能已滚过头）
       if (dir === 1) {
