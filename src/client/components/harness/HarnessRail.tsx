@@ -42,8 +42,7 @@ const HarnessTick = memo(function HarnessTick(props: {
       aria-label={label}
       title={label}
     >
-      <i className="mgcn-hsTickBar" aria-hidden="true" />
-      {favorited ? <i className="mgcn-hsTickStar" aria-hidden="true">★</i> : null}
+      <i className="mgcn-hsTickBar" role="button" aria-hidden="true" />
     </button>
   )
 })
