@@ -144,8 +144,21 @@ export function useMarkerData(
 
 /* ================= 布局钉位 ================= */
 
-/** 对话列根元素（桌面 rail 钉位基准——保持历史稳定实现） */
-function conversationRoot(): HTMLElement | null {
+/**
+ * 对话列根元素（桌面 rail 钉位基准）。
+ *
+ * DOM 契约随官方 layout 演进：
+ *  - 0.1.2-rc.1 ~ 0.1.5-alpha.1：conversation 独立槽，outlet 直接包 ConversationRoot——
+ *    `[data-slot="conversation"] > div[data-phase]`；
+ *  - 0.1.5-rc.1 起：conversation 并入 main 槽 keyed 条目（key="conversation"，经
+ *    ConversationPanel → `renderSlot("main.conversation")` 子槽落地）——
+ *    `[data-slot="main.conversation"] > div[data-phase]`。
+ * 两个 selector 都试，命中任一即为对话列根（data-phase 的元素是 ConversationRoot 根，
+ * 全高度列；InputBar 的 data-phase 是惰性/inert 节点，不会被误中）。
+ */
+export function conversationRoot(): HTMLElement | null {
+  const v15 = document.querySelector<HTMLElement>('[data-slot="main.conversation"] > div[data-phase]')
+  if (v15 !== null) return v15
   return document.querySelector<HTMLElement>('[data-slot="conversation"] > div[data-phase]')
 }
 

@@ -3,8 +3,8 @@
  * settings from the settings scope (`ctx.settingsScope.bind`) and routes the
  * user's choices back through the host bridge (POST /mega-chat-nav/settings).
  *
- * 配置选项为本插件自有定义：此处为 client 半持有的同值副本（与 host 半
- * src/settings.ts 一致；client bundle 不得依赖宿主包）。
+ * 配置选项（选项表/默认值/类型）集中在 src/shared/domain.ts，双半共享
+ * （纯字面量零依赖，client bundle 不因此引入宿主包）。
  *
  * The settings surface is optional and may apply after this plugin, so the
  * controller starts unbound and degrades to the defaults until {@link attach}
@@ -16,66 +16,41 @@
 // 0.1.2 线：SettingsScope 契约从已停发的 dsh-client-runtime 移到 dsh-client-ui-settings
 import type { SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec } from '@deepseek-ai/dsh-client-ui-settings/client'
 
-/** 风格选项：简约 / codex（时间线刻度）/ deepseek（用户消息面板）/ harness（复刻官方回合导航刻度轨） */
-export const STYLE_OPTIONS = ['minimal', 'codex', 'deepseek', 'harness'] as const
-export type NavStyle = typeof STYLE_OPTIONS[number]
+import {
+  ALIGN_OPTIONS,
+  BAND_OPTIONS,
+  CARD_ITEM_OPTIONS,
+  CARD_OPTIONS,
+  DEFAULT_ALIGN,
+  DEFAULT_BAND,
+  DEFAULT_CARD_COUNT,
+  DEFAULT_CARD_ITEMS,
+  DEFAULT_MARK_TONE,
+  DEFAULT_PAGING,
+  DEFAULT_SCROLL,
+  DEFAULT_SEARCH_SCOPES,
+  DEFAULT_SHOW,
+  DEFAULT_STYLE,
+  MARK_TONE_OPTIONS,
+  SCROLL_OPTIONS,
+  SEARCH_SCOPE_OPTIONS,
+  SHOW_OPTIONS,
+  STYLE_OPTIONS,
+} from '../shared/domain.ts'
+import type {
+  BandHeight,
+  CardCount,
+  CardItem,
+  MarkTone,
+  NavStyle,
+  RailAlign,
+  ScrollMode,
+  SearchScope,
+  ShowMode,
+} from '../shared/domain.ts'
 
-/** 停靠侧选项 */
-export const ALIGN_OPTIONS = ['left', 'right'] as const
-export type RailAlign = typeof ALIGN_OPTIONS[number]
-
-/** 节点栏条带高度档位 */
-export const BAND_OPTIONS = ['compact', 'standard', 'tall'] as const
-export type BandHeight = typeof BAND_OPTIONS[number]
-
-/** 跳转动画方式 */
-export const SCROLL_OPTIONS = ['smooth', 'instant'] as const
-export type ScrollMode = typeof SCROLL_OPTIONS[number]
-
-/** 显示策略：常显 / 悬停浮现 / 隐藏 */
-export const SHOW_OPTIONS = ['show', 'peek', 'hide'] as const
-export type ShowMode = typeof SHOW_OPTIONS[number]
-
-/** 翻页标记显示策略（按风格独立默认）：minimal 常显 / codex 隐藏 / deepseek 浮现 */
-export const DEFAULT_PAGING: Record<NavStyle, ShowMode> = {
-  minimal: 'show',
-  codex: 'hide',
-  deepseek: 'peek',
-  harness: 'hide',
-}
-
-/** 搜索内容范围（多选；用户必选） */
-export const SEARCH_SCOPE_OPTIONS = ['user', 'assistant', 'tool'] as const
-export type SearchScope = typeof SEARCH_SCOPE_OPTIONS[number]
-export const DEFAULT_SEARCH_SCOPES: SearchScope[] = ['user', 'assistant', 'tool']
-
-/** 悬停卡片数量 */
-export const CARD_OPTIONS = [1, 3, 5] as const
-export type CardCount = typeof CARD_OPTIONS[number]
-
-/** 悬浮卡默认数量（按风格独立）：minimal 3 张 / codex 1 张 / deepseek 1 张（无悬浮卡能力，占位） */
-export const DEFAULT_CARD_COUNT: Record<NavStyle, CardCount> = {
-  minimal: 3,
-  codex: 1,
-  deepseek: 1,
-  harness: 3,
-}
-
-/** 悬浮卡内容块（多选） */
-export const CARD_ITEM_OPTIONS = ['turn', 'duration', 'favorite'] as const
-export type CardItem = typeof CARD_ITEM_OPTIONS[number]
-export const DEFAULT_CARD_ITEMS: CardItem[] = ['turn', 'duration', 'favorite']
-
-/** 刻度色调：柔和（低对比）/ 深邃（高对比、清晰） */
-export const MARK_TONE_OPTIONS = ['soft', 'deep'] as const
-export type MarkTone = typeof MARK_TONE_OPTIONS[number]
-export const DEFAULT_MARK_TONE: MarkTone = 'deep'
-
-export const DEFAULT_STYLE: NavStyle = 'minimal'
-export const DEFAULT_ALIGN: RailAlign = 'left'
-export const DEFAULT_BAND: BandHeight = 'standard'
-export const DEFAULT_SCROLL: ScrollMode = 'smooth'
-export const DEFAULT_SHOW: ShowMode = 'show'
+// 共享领域定义（选项表/默认值/类型）转发给既有导入方，保持本模块公开面不变
+export * from '../shared/domain.ts'
 
 /** 条带高度档位 → 像素（minimal/codex 共用基础几何；deepseek 行高 30px 自成一档）
  *  - minimal / codex：compact 140 / standard 210 / tall 280

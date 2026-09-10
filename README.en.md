@@ -61,7 +61,7 @@ Normally a narrow rail (a short dash handle at each turn's row start); hovering 
 
 ### Harness — replica of the native turn-navigation tick rail
 
-A faithful replica of the dsh native turn navigator (TurnNavigator) with enhancements: a compact tick rail with in-band scrolling and top/bottom fade; hovering ripples the ticks outward (self + neighbors decay by tier), the reading position stays lit, jump targets pulse in the brand color, and favorited turns get a star on their tick; not-yet-loaded history turns show as extra-short ticks; soft/deep tone tiers supported. Click a tick to jump straight to that turn (history pages in automatically).
+A faithful replica of the dsh native turn navigator (TurnNavigator) with enhancements: a compact tick rail with in-band scrolling and top/bottom fade; hovering ripples the ticks outward (self + neighbors decay by tier), the reading position stays lit, jump targets pulse in the brand color; not-yet-loaded history turns show as extra-short ticks; soft/deep tone tiers supported. Click a tick to jump straight to that turn (history pages in automatically).
 
 <div align="center">
   <img width="357" height="312" alt="Harness style preview" src="https://github.com/user-attachments/assets/13182897-334a-4203-b797-0504effdcc47" />
@@ -107,24 +107,24 @@ On screens narrower than 1024px, the nav strip is lightened to a search-only aff
 
 ## Installation
 
-**Adapted for dsh v0.1.2-rc.1** (exact lock). Available via GitHub tag / npm / local package.
+**Adapted for dsh v0.1.5-rc.\*** (locked to the 0.1.5 rc line). Available via GitHub tag / npm / local package.
 
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.2
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.1
 ```
 
 **Local package**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.2.tgz
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.1.tgz
 ```
 
 **npm**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.2
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.1
 ```
 
 Uninstall:
@@ -140,14 +140,14 @@ dsh plugin --profile web remove dsh-mega-chat-nav
 1. Switch the **style** in the nav settings: Minimal / Codex / Chat / Harness (each keeps its own config);
 2. **Jump**: click any node / dash handle / tick to jump to that question; the reading position auto-highlights and follows;
 3. **Search**: click 🔍 for full-text search (incl. unloaded history), filterable by user / assistant / tool scopes; hits are highlighted, click to go;
-4. **Favorites**: click ⭐ to show only favorited questions (toggle on hover cards, message-panel row heads, or Harness tick stars);
+4. **Favorites**: click ⭐ to show only favorited questions (toggle on hover cards or message-panel row heads);
 5. **Dock side**: set Left/Right in settings, auto-mirrored;
 6. **Hosting**: when mega-settings is installed, the full settings page is collected into its member list (name **mega 导航**); otherwise a standalone full settings page is provided.
 
 ## Supported dsh versions & compatibility
 
-- **Adapted for dsh v0.1.2-rc.1 (exact lock; the 0.1.1 maintenance line lives on the 0.1.1 branch)**;
-- The host checks the version policy on startup (default `= 0.1.2-rc.1`); other versions print
+- **Adapted for dsh v0.1.5-rc.\* (the 0.1.5 rc line: rc.1 / rc.2 …, excluding the alpha line and the final release; the 0.1.2 line lives on the 0.1.2 branch, the 0.1.1 maintenance line on the 0.1.1 branch)**;
+- The host checks the version policy on startup (default `= 0.1.5-rc.*`); other versions print
   `dsh-mega-chat-nav may not be compatible with dsh <version>, use with caution` in the console, but the plugin still loads;
 - Maintainers can adjust `DSCH_COMPAT_POLICY` in `src/index.ts` (supports > / < / =, wildcards and arrays).
 

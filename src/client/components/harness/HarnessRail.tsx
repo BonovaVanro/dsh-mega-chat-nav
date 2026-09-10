@@ -1,14 +1,14 @@
 // harness 风格：复刻 dsh 原生回合导航栏（TurnNavigator）——悬浮刻度轨，
 // 每回合一个短横刻度（tick），hover 弹出预览卡（轮次 + 提问 + 性能指标）；
 // 增强（以 Codex 为参照）：hover 波纹展开（本尊 + 邻居逐级衰减）、current 常亮
-// 品牌色、跳转目标品牌脉冲、收藏刻度星标、soft/deep 色调档、翻页/跟读复用。
+// 品牌色、跳转目标品牌脉冲、soft/deep 色调档、翻页/跟读复用。
 // 数据与交互全部复用 ../rail 共享 hooks；刻度视觉为插件内化实现，不依赖官方 CSS hash。
 import type { ReactNode } from 'react'
 import { memo, useEffect, useRef, useState } from 'react'
 import { useMarkerData, usePinning, useReadingSpy, useBandPaging, useCardPreview, useFailureNotice, useLoadingNotice, useFavorites, useMobileMode, useMobileSearchButton, useNavSettings, useRailJump, usePeekState } from '../rail/useRail.ts'
 import { Cards } from '../rail/cards.tsx'
 import { PagingButton } from '../rail/paging.tsx'
-import { Hint } from '../rail/hint.tsx'
+import { JumpNotice } from '../rail/hint.tsx'
 import { RailActions } from '../rail/RailActions.tsx'
 import { MobileDrawer } from '../rail/MobileDrawer.tsx'
 import { STYLE_CAPABILITIES, BAND_HEIGHT_PX } from '../../settings.ts'
@@ -23,16 +23,14 @@ const HarnessTick = memo(function HarnessTick(props: {
   current: boolean
   focused: boolean
   jumping: boolean
-  favorited: boolean
   unloaded: boolean
   label: string
 }): ReactNode {
-  const { marker, current, focused, jumping, favorited, unloaded, label } = props
+  const { marker, current, focused, jumping, unloaded, label } = props
   const cls = ['mgcn-hsTick']
   if (focused) cls.push('mgcn-hsFocused')
   if (current) cls.push('mgcn-hsCurrent')
   if (jumping) cls.push('mgcn-hsJumping')
-  if (favorited) cls.push('mgcn-hsFav')
   if (unloaded) cls.push('mgcn-hsTickUnloaded')
   return (
     <button
@@ -133,6 +131,7 @@ export function HarnessRail(props: RailProps): ReactNode {
             onJump({ key, seq: seq ?? 0, turn: null, time: Date.now(), texts: [], members: [key] })
           }}
         />
+        <JumpNotice loading={loading} hint={hint} align={align} />
       </>
     )
   }
@@ -221,7 +220,6 @@ export function HarnessRail(props: RailProps): ReactNode {
                 const isFocused = focus !== null && focus.key === marker.key
                 const current = currentKey === marker.key
                 const jumping = jumpingKey === marker.key
-                const favorited = marker.members.some((k) => favorites.has(k))
                 // unloaded：回合不在 chat 已加载窗口 → 顶部历史段显示超短横线（所有节点栏高度生效）
                 const unloaded = loadedTurns !== null
                   && marker.turn !== null && !loadedTurns.has(marker.turn)
@@ -232,7 +230,6 @@ export function HarnessRail(props: RailProps): ReactNode {
                     current={current}
                     focused={isFocused}
                     jumping={jumping}
-                    favorited={favorited}
                     unloaded={unloaded}
                     label={marker.texts[0] ?? (marker.turn !== null ? 'Turn ' + marker.turn : '')}
                   />
@@ -251,7 +248,7 @@ export function HarnessRail(props: RailProps): ReactNode {
                 onLeave={hoverOff}
               />
             ) : null}
-            {loading !== null ? <Hint text={loading} align={align} position="bottom" loading /> : hint !== null ? <Hint text={hint} align={align} /> : null}
+            <JumpNotice loading={loading} hint={hint} align={align} />
           </div>
         )}
       </div>

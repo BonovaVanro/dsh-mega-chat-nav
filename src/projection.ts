@@ -17,6 +17,7 @@
  */
 
 import { z } from 'zod'
+import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 
 /** 注册本投影单元到框架的合并扩展表（接口声明于 /types 出口，须在声明处合并） */
@@ -132,15 +133,16 @@ export const msgNavProjectionDefinition: Omit<ProjectionDefinition<'msgNavMessag
         }
         return { ...state, questions: [...state.questions, entry] }
       }
-      case 'assistant/chunk': {
-        // 只记录每轮首个内容增量块（首 token 时间）；后续增量块不产生新 state
+      case 'assistant/attempt': {
+        // 0.1.5 线：逐 chunk 的 assistant/chunk 已移除，改由 assistant/attempt 携带压缩 stream；
+        // 首 token 时间用官方 dsh-llm 的 assistantStreamFirstTokenTime 从 stream 推导
         const turn = event.data.turn
-        const chunk = event.data.chunk
         const current = state.metrics[turn]
         if (current === undefined) return state
         if (current.firstTokenAt !== null) return state
-        if (chunk?.type !== 'text-delta' && chunk?.type !== 'reasoning-delta') return state
-        const metrics = { ...state.metrics, [turn]: { ...current, firstTokenAt: event.time } }
+        const first = assistantStreamFirstTokenTime(event.data.stream)
+        if (first === undefined) return state
+        const metrics = { ...state.metrics, [turn]: { ...current, firstTokenAt: first } }
         return { ...state, metrics }
       }
       case 'assistant/message': {

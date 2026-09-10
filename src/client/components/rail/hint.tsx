@@ -4,6 +4,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { RailAlign } from '../../settings.ts'
+import { conversationRoot } from './useRail.ts'
 
 export interface HintProps {
   text: string
@@ -14,9 +15,9 @@ export interface HintProps {
   loading?: boolean
 }
 
-/** 对话区域左/右边缘到视口的距离（fixed 定位用） */
+/** 对话区域左/右边缘到视口的距离（fixed 定位用；对话列根选择器见 useRail.conversationRoot） */
 function conversationEdge(align: RailAlign): number | null {
-  const root = document.querySelector<HTMLElement>('[data-slot="conversation"] > div[data-phase]')
+  const root = conversationRoot()
   if (root === null) return null
   const r = root.getBoundingClientRect()
   return align === 'right' ? window.innerWidth - r.right : r.left
@@ -47,4 +48,17 @@ export function Hint({ text, align, position = 'rail', loading = false }: HintPr
     </div>,
     document.body,
   )
+}
+
+/**
+ * 跳转提示组合（四风格 rail + 移动端抽屉共用）：加载中提示（对话区底部细条、
+ * 带加载点）优先于失败提示（rail 侧顶部）。
+ *
+ * 收口原因：移动端分支曾只渲染 MobileDrawer 而提示留在桌面 JSX 里，导致搜索
+ * 抽屉跳转未加载消息时看不到「正在加载较早记录」的分页进度——与常态跳转不一致。
+ */
+export function JumpNotice({ loading, hint, align }: { loading: string | null; hint: string | null; align: RailAlign }): ReactNode {
+  if (loading !== null) return <Hint text={loading} align={align} position="bottom" loading />
+  if (hint !== null) return <Hint text={hint} align={align} />
+  return null
 }

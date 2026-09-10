@@ -6,7 +6,7 @@ import { useMarkerData, usePinning, useReadingSpy, useBandPaging, useCardPreview
 import { Dot } from './dot.tsx'
 import { Cards } from '../rail/cards.tsx'
 import { PagingButton } from '../rail/paging.tsx'
-import { Hint } from '../rail/hint.tsx'
+import { JumpNotice } from '../rail/hint.tsx'
 
 import { RailActions } from '../rail/RailActions.tsx'
 import { MobileDrawer } from '../rail/MobileDrawer.tsx'
@@ -124,6 +124,7 @@ export function MinimalRail(props: MinimalRailProps): ReactNode {
             onJump({ key, seq: seq ?? 0, turn: null, time: Date.now(), texts: [], members: [key] })
           }}
         />
+        <JumpNotice loading={loading} hint={hint} align={align} />
       </>
     )
   }
@@ -225,7 +226,7 @@ export function MinimalRail(props: MinimalRailProps): ReactNode {
           </div>
         )}
       </div>
-      {loading !== null ? <Hint text={loading} align={align} position="bottom" loading /> : hint !== null ? <Hint text={hint} align={align} /> : null}
+      <JumpNotice loading={loading} hint={hint} align={align} />
       {focus !== null ? (
         <Cards
           focus={focus}

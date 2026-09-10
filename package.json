@@ -1,7 +1,16 @@
 {
   "name": "dsh-mega-chat-nav",
-  "version": "0.1.2",
+  "version": "0.1.5-rc.1",
   "description": "DSH mega 系列：会话提问圆点导航条（question-nav 移植 · mgcn 族）",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/BonovaVanro/dsh-mega-chat-nav#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BonovaVanro/dsh-mega-chat-nav.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BonovaVanro/dsh-mega-chat-nav/issues"
+  },
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
@@ -21,11 +30,16 @@
     "src",
     "cordis.patch.yml",
     "README.md",
-    "README.en.md"
+    "README.en.md",
+    "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
     "prepack": "npm run build",
+    "prepare": "npm run build",
     "test": "vitest run tests"
   },
   "dependencies": {
@@ -34,16 +48,14 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-tools": "^0.1.2-rc.1",
-    "@deepseek-ai/dsh-invariants": "^0.1.2-rc.1",
-    "@deepseek-ai/dsh-settings": "^0.1.2-rc.1",
-    "@deepseek-ai/dsh-session-projection": "^0.1.2-rc.1",
-    "@deepseek-ai/dsh-session": "^0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-locale": "^0.1.2-rc.1",
+    "@deepseek-ai/dsh-settings": ">=0.1.5-rc.1 <0.1.5",
+    "@deepseek-ai/dsh-session-projection": ">=0.1.5-rc.1 <0.1.5",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.5-rc.1 <0.1.5",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.5-rc.1 <0.1.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.2-rc.1"
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.1.5-rc.1 <0.1.5",
+    "@deepseek-ai/dsh-llm": ">=0.1.5-rc.1 <0.1.5"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -63,14 +75,12 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/dsh-tools": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-invariants": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-settings": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-session-projection": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-session": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-locale": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": "0.1.2-rc.1"
+    "@deepseek-ai/dsh-settings": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-session-projection": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-locale": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-llm": "0.1.5-rc.1"
   },
   "dsh": {
     "bundle": {

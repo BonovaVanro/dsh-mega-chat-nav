@@ -19,13 +19,14 @@ import { checkDshPolicy, dshCompatMessage, type DshCompatPolicy } from './compat
 export const name = 'dsh-mega-chat-nav'
 
 /**
- * 兼容策略（0.1.2 分支：适配 dsh 0.1.1 之后、锁定 dsh-v0.1.2-rc.1）。
- * - '= 0.1.2-rc.1' = 精确锁定 npm 已发布的 0.1.2-rc.1；
- * - 本次范围**不含 0.1.2 其它预发布 / 0.1.3-alpha.1**（其插件相关 API 与 0.1.2-rc.1
- *   逐字节相同，但按分支约定不在本次声明支持，遇到会给出不兼容警示）；
- * - 0.1.1-* 维护线（0.1.1-rc.1 / 0.1.1-rc.2）由 0.1.1 分支负责。
+ * 兼容策略：锁定 dsh-v0.1.5 rc 线（'= 0.1.5-rc.*'）。
+ * - rc 线（rc.1 / rc.2 …）布局一致：conversation 并入 main 槽 keyed 条目
+ *   （DOM 为 [data-slot="main.conversation"]），导航条钉位依赖此契约；
+ * - 0.1.5-alpha.* 的 conversation 独立槽契约与 rc 线不互通，正式版 0.1.5 未适配，
+ *   两者均不在本范围（通配 'rc.*' 只命中 rc 预发布）；
+ * - 0.1.2 线由 0.1.2 分支负责（锁定 = 0.1.2-rc.1）；0.1.1-* 维护线由 0.1.1 分支负责。
  */
-const DSCH_COMPAT_POLICY: DshCompatPolicy = { op: '=', target: '0.1.2-rc.1' }
+const DSCH_COMPAT_POLICY: DshCompatPolicy = { op: '=', target: '0.1.5-rc.*' }
 
 const dshRequire = createRequire(import.meta.url)
 

@@ -255,11 +255,13 @@
   word-break: break-word;
 }
 
-/* Transient jump-failure hint (portal-rendered near the rail top, so it never
-   pushes the centered dot band or clips in the 44px-wide rail). */
+/* Transient jump hint (loading / failure; portal-rendered near the rail top, so it
+   never pushes the centered dot band or clips in the 44px-wide rail).
+   z-index 需高于桌面搜索浮层（.mgcn-search = 62）：在搜索浮层内点击命中时提示必须可见；
+   仍低于移动抽屉（.mgcn-searchDrawer = 91，模态语义）。 */
 .mgcn-hint {
   position: fixed;
-  z-index: 30;
+  z-index: 70;
   max-width: 260px;
   background: var(--dsw-alias-bg-layer-3);
   border: 1px solid var(--dsw-alias-border-l1);
@@ -454,7 +456,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Settings page (settings.mgcn-plugins.mgcn-tab). */
+/* Settings page (settings.plugins.tab). */
 .mgcn-settings {
   display: flex;
   flex-direction: column;
@@ -1762,23 +1764,6 @@ nav:has(> [class*="_scroller"]) {
   transform-origin: right center;
 }
 
-/* 收藏星标：刻度旁小星（favorited 显示） */
-.mgcn-hsTickStar {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 8px;
-  font-style: normal;
-  line-height: 1;
-  color: var(--dsw-alias-state-warning);
-  pointer-events: none;
-}
-.mgcn-rail:not(.mgcn-railRight) .mgcn-hsTickStar {
-  left: 22px;
-}
-.mgcn-railRight .mgcn-hsTickStar {
-  right: 22px;
-}
 
 /* 阅读位置（current）：常亮品牌色、略长 */
 .mgcn-hsTick.mgcn-hsCurrent .mgcn-hsTickBar {

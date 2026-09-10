@@ -62,7 +62,7 @@ DSH（DeepSeek Harness）的**会话提问导航条**：在会话一侧显示整
 
 ### 虎鲸（Harness）—— 复刻官方回合导航刻度轨
 
-复刻 dsh 原生回合导航栏（TurnNavigator）的紧凑刻度轨形态，并叠加增强：每轮一个短横刻度、带内滚动 + 上下渐隐；悬停刻度波纹展开（本尊 + 邻居逐级衰减）、阅读位置常亮、跳转目标品牌脉冲、收藏刻度星标；未加载的历史回合显示超短横线；支持柔和/深邃色调档。点击刻度直达对应回合提问（自动分页加载历史）。
+复刻 dsh 原生回合导航栏（TurnNavigator）的紧凑刻度轨形态，并叠加增强：每轮一个短横刻度、带内滚动 + 上下渐隐；悬停刻度波纹展开（本尊 + 邻居逐级衰减）、阅读位置常亮、跳转目标品牌脉冲；未加载的历史回合显示超短横线；支持柔和/深邃色调档。点击刻度直达对应回合提问（自动分页加载历史）。
 
 <div align="center">
   <img width="357" height="312" alt="虎鲸风格-预览" src="https://github.com/user-attachments/assets/13182897-334a-4203-b797-0504effdcc47" />
@@ -108,24 +108,24 @@ DSH（DeepSeek Harness）的**会话提问导航条**：在会话一侧显示整
 
 ## 安装
 
-**已适配 dsh v0.1.2-rc.1**（精确锁定）。提供 GitHub tag / npm / 本地包三种安装方式。
+**已适配 dsh v0.1.5-rc.\***（锁定 0.1.5 rc 线）。提供 GitHub tag / npm / 本地包三种安装方式。
 
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.2
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.1
 ```
 
 **本地包**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.2.tgz
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.1.tgz
 ```
 
 **npm**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.2
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.1
 ```
 
 卸载：
@@ -141,14 +141,14 @@ dsh plugin --profile web remove dsh-mega-chat-nav
 1. 在导航条设置中切换**风格**：简约 / Codex / 蓝鲸 / 虎鲸（各风格独立保存配置）；
 2. **跳转**：点击导航条任意节点/把手/刻度直达对应提问，阅读位置自动高亮跟随；
 3. **搜索**：点 🔍 全文搜索（含未加载历史），可按用户/助手/工具范围过滤；命中词高亮，点击直达；
-4. **收藏**：点 ⭐ 只看已收藏提问（在悬停卡、消息面板行首或虎鲸刻度星标切换收藏）；
+4. **收藏**：点 ⭐ 只看已收藏提问（在悬停卡或消息面板行首切换收藏）；
 5. **停靠侧**：设置中对齐左/右，随停靠侧自动镜像；
 6. **收纳**：安装了 mega-settings 时，完整设置页自动收纳进其成员列表（名称 **mega 导航**）；未安装时提供自足完整设置页。
 
 ## 适用 dsh 版本与兼容性
 
-- **已适配 dsh 版本：0.1.2-rc.1（精确锁定；0.1.1 维护线由 0.1.1 分支负责）**；
-- 宿主启动会按版本策略自检（默认 `= 0.1.2-rc.1`）；检测到其他版本控制台会打印
+- **已适配 dsh 版本：0.1.5-rc.\*（0.1.5 rc 线通配：rc.1 / rc.2 …；不含 alpha 线与正式版；0.1.2 线由 0.1.2 分支负责，0.1.1 维护线由 0.1.1 分支负责）**；
+- 宿主启动会按版本策略自检（默认 `= 0.1.5-rc.*`）；检测到其他版本控制台会打印
   `dsh-mega-chat-nav 可能不适配 dsh <版本> 版本，请慎重使用`，插件仍可加载使用；
 - 维护者可自行调整 `src/index.ts` 的 `DSCH_COMPAT_POLICY`（支持 > / < / = 与通配、数组）。
 

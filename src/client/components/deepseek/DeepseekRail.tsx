@@ -12,7 +12,7 @@
 import type { ReactNode } from 'react'
 import { memo, useEffect, useRef, useState } from 'react'
 import { useMarkerData, usePinning, useReadingSpy, useFailureNotice, useLoadingNotice, useFavorites, useMobileMode, useMobileSearchButton, useNavSettings, clockText } from '../rail/useRail.ts'
-import { Hint } from '../rail/hint.tsx'
+import { JumpNotice } from '../rail/hint.tsx'
 import { fetchHits, type SearchHit } from '../rail/search.tsx'
 import { QuickSettings } from '../rail/quick-settings.tsx'
 import { BAND_HEIGHT_PX } from '../../settings.ts'
@@ -378,6 +378,7 @@ export function DeepseekRail(props: RailProps): ReactNode {
             </div>
           </>
         ) : null}
+        <JumpNotice loading={loading} hint={hint} align={align} />
       </>
     )
   }
@@ -527,7 +528,7 @@ export function DeepseekRail(props: RailProps): ReactNode {
           </div>
         )}
       </div>
-      {loading !== null ? <Hint text={loading} align={align} position="bottom" loading /> : hint !== null ? <Hint text={hint} align={align} /> : null}
+      <JumpNotice loading={loading} hint={hint} align={align} />
     </div>
   )
 }
