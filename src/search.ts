@@ -19,7 +19,44 @@ interface EventLike {
   type?: string
   seq?: number
   time?: number
+  /** 追加语义（append）/ 替换副本（compaction 检查点等） */
+  surfaceOp?: string
   data?: { id?: string; content?: unknown; message?: { id?: string; content?: unknown }; source?: { kind?: string } }
+}
+
+/**
+ * 真实人类提问：append 语义 + 来源为 user / steering。
+ * 对齐 msgNavMessages 投影的 fold 规则——注入上下文（plugin / agent-instructions /
+ * skill-catalog / runtime-context…）与压缩替换副本都不是用户内容，不参与搜索。
+ */
+function isUserAuthored(ev: EventLike): boolean {
+  if (ev.type !== 'user/message') return false
+  if (ev.surfaceOp !== undefined && ev.surfaceOp !== 'append') return false
+  const kind = ev.data?.source?.kind
+  return kind === 'user' || kind === 'steering'
+}
+
+/** 助手消息参与搜索的文本上限（字）：超长回复只索引前段，避免长正文主导命中与结果体积 */
+const ASSISTANT_TEXT_LIMIT = 400
+
+/** 内容块 → 纯文本（仅拼接 text 块；字符串内容原样返回） */
+function contentText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  const parts: string[] = []
+  for (const b of content) {
+    if (b && typeof b === 'object' && (b as { type?: string }).type === 'text') {
+      const txt = (b as { text?: unknown }).text
+      if (typeof txt === 'string') parts.push(txt)
+    }
+  }
+  return parts.join(' ')
+}
+
+/** 截断到 limit 个字（按 code point 计，不切断代理对）；未超限时原样返回（零拷贝路径） */
+function clampText(text: string, limit: number): string {
+  if (text.length <= limit) return text
+  return [...text].slice(0, limit).join('')
 }
 
 function eventText(ev: EventLike): string {
@@ -30,20 +67,9 @@ function eventText(ev: EventLike): string {
     const args = typeof d?.arguments === 'string' ? d.arguments : ''
     return name.length === 0 && args.length === 0 ? '' : name + ' ' + args.slice(0, 200)
   }
-  if (ev.type !== 'user/message' && ev.type !== 'assistant/message') return ''
-  const msg = ev.type === 'user/message' ? ev.data : ev.data?.message
-  const content = msg?.content
-  if (typeof content === 'string') return content
-  if (Array.isArray(content)) {
-    const parts: string[] = []
-    for (const b of content) {
-      if (b && typeof b === 'object' && (b as { type?: string }).type === 'text') {
-        const txt = (b as { text?: unknown }).text
-        if (typeof txt === 'string') parts.push(txt)
-      }
-    }
-    return parts.join(' ')
-  }
+  // 助手回复：仅索引前 ASSISTANT_TEXT_LIMIT 字；用户消息不截断（提问通常较短）
+  if (ev.type === 'assistant/message') return clampText(contentText(ev.data?.message?.content), ASSISTANT_TEXT_LIMIT)
+  if (ev.type === 'user/message') return contentText(ev.data?.content)
   return ''
 }
 
@@ -90,6 +116,15 @@ function makeLru<T>(capacity = 32) {
 }
 
 const searchCache = makeLru<{ hits: SearchHit[]; truncated: boolean }>()
+
+/**
+ * 检索缓存键：必须包含**内容范围**。仅用 (session, q, limit) 作键时，用户改动
+ * 「搜索内容」后对同一关键词的检索会命中旧范围的缓存——表现为"去掉了助手却还能
+ * 搜到助手"。scopes 排序后入键，使集合相同而顺序不同的请求共享缓存。
+ */
+export function searchCacheKey(sessionId: string, q: string, limit: number, scopes: readonly string[]): string {
+  return sessionId + '|' + q + '|' + limit + '|' + [...scopes].sort().join(',')
+}
 
 /** 访问可选服务：未注入的 cordis 服务在属性读取时抛错，捕获后按缺失处理 */
 function tryGet<T>(getter: () => T): T | undefined {
@@ -183,11 +218,12 @@ async function readEventSources(
  *     dsh-client-ui-conversation；id 为 turn:step 组合）
  * AI 命中的方向判定 seq 取所属轮用户消息序号（AI 行紧跟其用户提问，位置近似）。
  */
-/** 事件 → 搜索内容范围 */
-function scopeOf(ev: EventLike): 'user' | 'assistant' | 'tool' {
+/** 事件 → 搜索内容范围；注入/非消息事件返回 null（不参与搜索） */
+function scopeOf(ev: EventLike): 'user' | 'assistant' | 'tool' | null {
   if (ev.type === 'tool/call') return 'tool'
   if (ev.type === 'assistant/message') return 'assistant'
-  return 'user'
+  if (ev.type === 'user/message') return isUserAuthored(ev) ? 'user' : null
+  return null
 }
 
 export function searchEvents(events: readonly SourcedEvent[], q: string, limit: number, scopes: readonly string[] = ['user', 'assistant', 'tool']): { hits: SearchHit[]; truncated: boolean } {
@@ -201,10 +237,11 @@ export function searchEvents(events: readonly SourcedEvent[], q: string, limit: 
       if (typeof t === 'number') turn = t
       continue
     }
-    if (ev.type === 'user/message') lastUserSeq = ev.seq ?? 0
+    if (isUserAuthored(ev)) lastUserSeq = ev.seq ?? 0
     const text = eventText(ev)
     if (!text || !text.toLowerCase().includes(needle)) continue
-    if (!scopes.includes(scopeOf(ev))) continue
+    const scope = scopeOf(ev)
+    if (scope === null || !scopes.includes(scope)) continue
     const role = roleOf(ev)
     const isAssistant = role === 'assistant'
     const isTool = ev.type === 'tool/call'
@@ -296,7 +333,7 @@ export function registerSearchRoute(ctx: Context): void {
             const scopes = rawScopes.length > 0
               ? [...new Set(['user', ...rawScopes])].filter((s) => s === 'user' || s === 'assistant' || s === 'tool')
               : ['user', 'assistant', 'tool']
-            const cacheKey = sessionId + '|' + q + '|' + limit
+            const cacheKey = searchCacheKey(sessionId, q, limit, scopes)
             const cached = searchCache.get(cacheKey)
             if (cached) { write(200, { ok: true, ...cached }); return }
             const persistence = tryGet(() => (scoped as unknown as { sessionPersistence?: PersistenceLike }).sessionPersistence)

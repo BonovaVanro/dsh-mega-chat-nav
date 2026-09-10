@@ -112,19 +112,19 @@ On screens narrower than 1024px, the nav strip is lightened to a search-only aff
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.1
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.1-fix.1
 ```
 
 **Local package**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.1.tgz
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.1-fix.1.tgz
 ```
 
 **npm**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.1
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.1-fix.1
 ```
 
 Uninstall:
@@ -156,3 +156,5 @@ dsh plugin --profile web remove dsh-mega-chat-nav
 **Search does nothing?** Search relies on host-side routes (webServer/sessions). If those services are missing in the deployment, search is unavailable while navigation and other features keep working.
 
 **Can assistant thinking (think) content be searched?** Not currently — think content is excluded from search.
+
+**Why can't I search deep inside a long assistant reply?** Only the first **400 characters** of an assistant message are indexed; the rest of a long reply is not searchable (user messages are not truncated).

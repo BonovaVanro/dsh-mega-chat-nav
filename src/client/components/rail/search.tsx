@@ -54,6 +54,22 @@ function roleTag(role: string, t: Translate): string {
   return t('search.tag.user')
 }
 
+/** 命中角色 → 搜索范围（steering 归用户侧，与 host 侧 scopeOf 对齐） */
+export function scopeOfRole(role: string): 'user' | 'assistant' | 'tool' {
+  if (role === 'assistant') return 'assistant'
+  if (role === 'tool') return 'tool'
+  return 'user'
+}
+
+/**
+ * 按当前勾选的搜索范围过滤命中——前端保险层。
+ * host 已按 scopes 条件检索（未勾选的类型不进结果集），这里再挡一次，
+ * 使任何越界命中（陈旧响应、缓存意外）都不会显示出来。
+ */
+export function filterHitsByScopes(hits: readonly SearchHit[], scopes: readonly string[]): SearchHit[] {
+  return hits.filter((hit) => scopes.includes(scopeOfRole(hit.role)))
+}
+
 export function SearchBox(props: SearchBoxProps): ReactNode {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchHit[]>([])
@@ -94,7 +110,9 @@ export function SearchBox(props: SearchBoxProps): ReactNode {
     }
   }, [])
 
-  const historicCount = results.filter((hit) => hit.historic).length
+  // 前端保险层：host 已按 scopes 检索，这里再按当前勾选挡一次
+  const visible = filterHitsByScopes(results, props.scopes)
+  const historicCount = visible.filter((hit) => hit.historic).length
 
   return (
     <div className="mgcn-search" role="dialog" aria-label={props.t('search.placeholder')}>
@@ -108,12 +126,12 @@ export function SearchBox(props: SearchBoxProps): ReactNode {
       />
       {busy ? <div className="mgcn-search-busy">…</div> : null}
       {!busy && query.trim() === '' && props.emptyContent !== undefined ? props.emptyContent : null}
-      {!busy && results.length > 0 && historicCount > 0 ? (
+      {!busy && visible.length > 0 && historicCount > 0 ? (
         <div className="mgcn-search-historic">{props.t('search.historic', { n: historicCount })}</div>
       ) : null}
-      {results.length > 0 ? (
+      {visible.length > 0 ? (
       <div className="mgcn-search-results">
-        {results.map((hit) => (
+        {visible.map((hit) => (
           <button
             key={hit.key + ':' + hit.seq}
             type="button"

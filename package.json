@@ -1,6 +1,6 @@
 {
   "name": "dsh-mega-chat-nav",
-  "version": "0.1.5-rc.1",
+  "version": "0.1.5-rc.1-fix.1",
   "description": "DSH mega 系列：会话提问圆点导航条（question-nav 移植 · mgcn 族）",
   "license": "Apache-2.0",
   "homepage": "https://github.com/BonovaVanro/dsh-mega-chat-nav#readme",

@@ -113,19 +113,19 @@ DSH（DeepSeek Harness）的**会话提问导航条**：在会话一侧显示整
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.1
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.1-fix.1
 ```
 
 **本地包**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.1.tgz
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.1-fix.1.tgz
 ```
 
 **npm**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.1
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.1-fix.1
 ```
 
 卸载：
@@ -157,3 +157,5 @@ dsh plugin --profile web remove dsh-mega-chat-nav
 **搜索没反应？** 搜索依赖 host 侧路由（webServer/sessions）。若部署环境缺少这些服务，搜索不可用，导航条的跳转等其余功能不受影响。
 
 **助手消息的思考（think）内容能搜到吗？** 暂不参与搜索。
+
+**助手回复很长，为什么搜不到后半段？** 助手消息仅索引**前 400 字**，超长回复的后段不参与搜索；提问侧不截断（整段可搜）。

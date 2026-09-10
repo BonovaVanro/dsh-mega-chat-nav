@@ -180,6 +180,12 @@ function jumpPortsFor(ctx: ClientContext, sessionId: string): JumpPorts {
       const scrollToRow = (): void => {
         const port = document.querySelector<HTMLElement>('[data-conversation-scroll]')
         if (port !== null) {
+          // 贴底跳转：官方「回到底部」跟随会把平滑滚动拉回底部，离底部近的轮次（如倒数
+          // 第五轮）因此定位失败。平滑模式下若当前在底部，首帧先向上移 2px 脱离贴底判定，
+          // 再走原滚动逻辑（rowTop 按绝对位置计算，与这 2px 无关）。
+          if (mode === 'smooth' && port.scrollHeight - port.scrollTop - port.clientHeight <= 1) {
+            port.scrollBy({ top: -2 })
+          }
           const rowTop = row.getBoundingClientRect().top - port.getBoundingClientRect().top + port.scrollTop
           port.scrollTo({ top: rowTop - 12, behavior: mode })
         } else {

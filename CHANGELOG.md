@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.1.5-rc.1-fix.1（修复版 · 适配 dsh v0.1.5-rc.\*）
+
+[中文](#cn-v0.1.5-rc.1-fix.1) | [English](#en-v0.1.5-rc.1-fix.1)
+
+本版本修复两处**既有问题**（自功能实现以来即存在，并非 `0.1.5-rc.1` 引入）：搜索「内容范围」设置不生效、贴底跳转定位失败。
+
+<h3 id="cn-v0.1.5-rc.1-fix.1">问题修复</h3>
+
+- **搜索「内容范围」失效**：检索缓存键未包含内容范围，改动勾选后对同一关键词的检索会命中旧范围的缓存（表现为「去掉了助手勾选仍能搜到助手」）；缓存键补入 scopes（排序入键，集合相同共享缓存）。
+- **注入内容被当作「用户」范围**：`plugin` / `agent-instructions` / `skill-catalog` 等来源的消息与压缩替换副本不再参与搜索（按 append 语义 + `source.kind` 严格判定）。
+- **贴底跳转定位失败**：平滑滚动期间官方「回到底部」跟随会把滚动拉回底部，离底部近的轮次（如倒数第五轮）因此失败；现于平滑模式且当前贴底时首帧上移 2px 脱离该判定。
+
+### 体验优化
+
+- 助手消息仅索引**前 400 字**，超长回复的后段不参与搜索；提问侧不截断。
+- 前端渲染前按当前勾选再过滤一层：任何越界命中（陈旧响应、缓存意外）都不会显示。
+
+### 其他变更
+
+- **测试**：新增 `tests/search.spec.ts`（13 用例：范围过滤 / 400 字边界 / 缓存键 / 前端过滤）。
+- **文档**：README 中英 FAQ 补 400 字索引说明。
+
+<h3 id="en-v0.1.5-rc.1-fix.1">Bug fixes</h3>
+
+This release fixes two **long-standing issues** that have existed since the features were first implemented (not introduced in `0.1.5-rc.1`): the search content-scope setting having no effect, and jumps failing when the view is docked at the bottom.
+
+- **Search scope had no effect**: the search cache key did not include the content scopes, so re-searching the same keyword after changing the selection returned results filtered by the old scopes (assistant hits still appeared after unchecking it). The cache key now includes the scopes.
+- **Injected content was indexed as "user"**: messages from `plugin` / `agent-instructions` / `skill-catalog` sources and compaction copies no longer take part in search (strict append semantics + `source.kind` check).
+- **Jumps failed near the bottom**: the official "back to bottom" follow pulled the smooth scroll back down, breaking jumps to turns close to the bottom; the rail now nudges 2px away from the bottom on the first frame when docked there.
+
+### Improvements
+
+- Assistant messages are indexed up to the first **400 characters** only; user messages are not truncated.
+- The client filters hits by the current selection before rendering, so out-of-scope hits are never shown.
+
+### Other changes
+
+- **Tests**: added `tests/search.spec.ts` (13 cases: scope filtering / 400-char boundary / cache key / client-side filtering).
+- **Docs**: FAQ entries about the 400-character index limit (zh/en).
+
 ## 0.1.5-rc.1（适配 dsh v0.1.5-rc.\* · 0.1.5 rc 线）
 
 [中文](#cn-v0.1.5-rc.1) | [English](#en-v0.1.5-rc.1)
