@@ -1,6 +1,6 @@
 {
   "name": "dsh-mega-chat-nav",
-  "version": "0.1.5-rc.1-fix.1",
+  "version": "0.1.5-rc.2",
   "description": "DSH mega 系列：会话提问圆点导航条（question-nav 移植 · mgcn 族）",
   "license": "Apache-2.0",
   "homepage": "https://github.com/BonovaVanro/dsh-mega-chat-nav#readme",
@@ -75,12 +75,12 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/dsh-settings": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-session-projection": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-locale": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-llm": "0.1.5-rc.1"
+    "@deepseek-ai/dsh-settings": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-session-projection": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-locale": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-llm": "0.1.5-rc.2"
   },
   "dsh": {
     "bundle": {

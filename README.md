@@ -108,24 +108,24 @@ DSH（DeepSeek Harness）的**会话提问导航条**：在会话一侧显示整
 
 ## 安装
 
-**已适配 dsh v0.1.5-rc.\***（锁定 0.1.5 rc 线）。提供 GitHub tag / npm / 本地包三种安装方式。
+**已适配 dsh v0.1.5-rc.\***（锁定 0.1.5 rc 线）。提供 npm / GitHub tag / 本地包三种安装方式。
+
+**npm**
+
+```
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2
+```
 
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.1-fix.1
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2
 ```
 
 **本地包**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.1-fix.1.tgz
-```
-
-**npm**
-
-```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.1-fix.1
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2.tgz
 ```
 
 卸载：

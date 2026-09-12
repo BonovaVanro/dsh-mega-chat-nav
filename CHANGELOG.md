@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.5-rc.2（适配 dsh v0.1.5-rc.\*）
+
+[中文](#cn-v0.1.5-rc.2) | [English](#en-v0.1.5-rc.2)
+
+官方 `0.1.5-rc.1` → `0.1.5-rc.2` 为**整线版本重发**（编译产物、类型与入口零变化，仅依赖声明版本号升级），插件代码无需适配改动；本版本同时修复虎鲸风格的悬停提示问题。
+
+<h3 id="cn-v0.1.5-rc.2">问题修复</h3>
+
+- **虎鲸风格悬停时出现原生浏览器提示**：刻度按钮带有原生 HTML `title` 属性，悬停时浏览器会额外渲染一个原生 tooltip，与插件自身的悬停预览卡片内容重复、样式突兀；现移除该属性（`aria-label` 保留，无障碍能力不受影响）。其余三种风格无此问题。
+
+### 其他变更
+
+- **适配目标**：dsh v0.1.5-rc.\*（0.1.5 rc 线：rc.1 / rc.2 …）；dev 构建基线 6 个官方包同步升级至 `0.1.5-rc.2`（peer 范围 `>=0.1.5-rc.1 <0.1.5` 与兼容策略 `= 0.1.5-rc.*` 同时覆盖 rc.1 / rc.2，未收窄）。
+- **验证**：完整构建 + 72 用例测试全过（rc.2 依赖下）。
+
+<h3 id="en-v0.1.5-rc.2">Bug fixes</h3>
+
+- **Native browser tooltip appeared when hovering the Harness style**: the tick buttons carried a native HTML `title` attribute, so the browser rendered an extra native tooltip on top of the plugin's own hover preview card — duplicate content with jarring styling. The attribute is now removed (`aria-label` is kept, so accessibility is unaffected). The other three styles were never affected.
+
+### Other changes
+
+- **Target**: dsh v0.1.5-rc.\* (the 0.1.5 rc line: rc.1 / rc.2 …); the 6 official dev dependencies moved to `0.1.5-rc.2` (the peer range `>=0.1.5-rc.1 <0.1.5` and the compat policy `= 0.1.5-rc.*` still cover both rc.1 and rc.2, and were not narrowed).
+- **Verification**: full build + all 72 tests pass against rc.2.
+
 ## 0.1.5-rc.1-fix.1（修复版 · 适配 dsh v0.1.5-rc.\*）
 
 [中文](#cn-v0.1.5-rc.1-fix.1) | [English](#en-v0.1.5-rc.1-fix.1)

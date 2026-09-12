@@ -107,24 +107,24 @@ On screens narrower than 1024px, the nav strip is lightened to a search-only aff
 
 ## Installation
 
-**Adapted for dsh v0.1.5-rc.\*** (locked to the 0.1.5 rc line). Available via GitHub tag / npm / local package.
+**Adapted for dsh v0.1.5-rc.\*** (locked to the 0.1.5 rc line). Available via npm / GitHub tag / local package.
+
+**npm**
+
+```
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2
+```
 
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.1-fix.1
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2
 ```
 
 **Local package**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.1-fix.1.tgz
-```
-
-**npm**
-
-```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.1-fix.1
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2.tgz
 ```
 
 Uninstall:

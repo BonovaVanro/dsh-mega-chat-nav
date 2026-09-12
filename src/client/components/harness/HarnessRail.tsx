@@ -38,7 +38,6 @@ const HarnessTick = memo(function HarnessTick(props: {
       className={cls.join(' ')}
       data-mega-chat-nav-key={marker.key}
       aria-label={label}
-      title={label}
     >
       <i className="mgcn-hsTickBar" role="button" aria-hidden="true" />
     </button>
