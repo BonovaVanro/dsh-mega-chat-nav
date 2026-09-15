@@ -36,14 +36,14 @@ import { StandaloneSettings } from './components/settings/StandaloneSettings.tsx
 import { NavSettingsController } from './settings.ts'
 import type { NavInjected, ObservableFace } from './components/shared/types.ts'
 import { en, zh } from './locales.ts'
-import { goTo, type JumpFailureCode, type JumpPorts, type JumpSnapshot } from './jump.ts'
+import { goTo, REVEAL_GAP, type JumpFailureCode, type JumpPorts, type JumpSnapshot } from './jump.ts'
 
 /** Locale namespace this plugin owns. */
 const NS = 'mega-chat-nav'
 
 /** Services required by this plugin.
  *  - slots / locale：官方服务（0.1.2 线 slots 由 ui-renderer 提供）；
- *  - sessions：api-session-controller 提供（binding/list/projections 契约不变）；
+ *  - sessions：api-session-controller 提供（binding/projections 契约不变）；
  *  - uiConversation：ui-conversation 提供——活窗口对话行快照源（chat target）。
  *    cordis Service 属性访问须在 inject 声明，否则抛 "cannot get property without inject"。 */
 export const inject = ['slots', 'locale', 'sessions', 'uiConversation']
@@ -53,7 +53,6 @@ export const inject = ['slots', 'locale', 'sessions', 'uiConversation']
  *  binding()/list/projections 契约不变（hostFace().sessions 才是被移除的那个）。 */
 interface SessionsFace {
   binding(sessionId: string): { session: SessionFace } | undefined
-  list: { subscribe(cb: () => void): () => void }
 }
 
 interface SessionSnapshotLike {
@@ -66,6 +65,9 @@ interface SessionSnapshotLike {
 interface SessionFace {
   getSnapshot(): SessionSnapshotLike
   loadOlder(): Promise<void>
+  /** 官方跳转加载器：单次调用内连续扩窗（200 条/页）直到窗口覆盖 seq；
+   *  重复调用会下压共享目标并返回在飞 promise（见 ISession.loadThrough 契约）。 */
+  loadThrough(seq: number): Promise<void>
   subscribe(cb: () => void): () => void
   projections: { faceOf(key: string): { getSnapshot(): unknown; subscribe(cb: () => void): () => void } }
 }
@@ -78,8 +80,12 @@ function sessionsOf(ctx: ClientContext): SessionsFace {
 interface ChatRowLike {
   key: string
   anchorSeq: number
+  /** 锚点序号缺失时的兜底字段（pre-0.1.2 legacy 记录只有 seq） */
+  seq?: number
   visibility?: string
   kind?: string
+  /** 事件在会话层级中的位置（回合/步骤归属判定用，见 turnOf） */
+  location?: unknown
   data?: unknown
 }
 
@@ -132,9 +138,155 @@ function releaseApply(): void {
   globalThis.__dshMegaChatNavApplied = undefined
 }
 
+/** 每次跳转的世代号（按会话）：新跳转令上一次的循环在下一次检查时自我中止，
+ *  避免「连点两个节点 → 两个循环同时滚动 + 同时扩窗」的互相打架。 */
+const jumpEpochs = new Map<string, number>()
+
+/** 对话滚动容器（虚拟渲染与官方跟随逻辑的宿主） */
+function scrollportOf(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-conversation-scroll]')
+}
+
+/** 行是否落在滚动容器视口内 */
+function inViewportOf(port: HTMLElement | null, row: HTMLElement): boolean {
+  if (port === null) return true
+  const rect = row.getBoundingClientRect()
+  const view = port.getBoundingClientRect()
+  return rect.bottom > view.top && rect.top < view.bottom
+}
+
+/** 目标行顶部与视口顶的间距（正值 = 目标在视口顶之下） */
+function rowOffset(port: HTMLElement, row: HTMLElement): number {
+  return row.getBoundingClientRect().top - port.getBoundingClientRect().top
+}
+
+/** 平滑落位动画参数：时长下限 / 上限（毫秒）与速度（px/ms） */
+const SMOOTH_MIN_MS = 220
+const SMOOTH_MAX_MS = 1200
+const SMOOTH_PX_PER_MS = 7
+
+/**
+ * 自己驱动的平滑滚动：逐帧写**绝对**位置，整体单调，直到落到目标。
+ *
+ * 为什么不用原生 `scrollTo({behavior:'smooth'})`：
+ *  - 长距离时原生动画时长有上限，上万像素会在几百毫秒里"糊"过去，观感接近瞬移
+ *    （实测 12650px 的跳转就有这个抱怨）；
+ *  - 中途官方会按阅读锚点补偿 scrollTop（实测日志里 44297 → 43804 → 31154），
+ *    原生动画与它互相打断，于是出现「先冲过头再退回」。
+ * 逐帧绝对插值天然免疫这两点：补偿造成的偏差在下一帧就被覆盖，轨迹不会掉头。
+ *
+ * @param port - 滚动容器
+ * @param goal - 目标绝对 scrollTop
+ * @returns 动画结束（或被取消）时 resolve
+ */
+function animateScrollTop(port: HTMLElement, goal: number): Promise<void> {
+  const from = port.scrollTop
+  const distance = goal - from
+  const total = Math.abs(distance)
+  if (total < 2) {
+    port.scrollTop = goal
+    return Promise.resolve()
+  }
+  const duration = Math.min(SMOOTH_MAX_MS, Math.max(SMOOTH_MIN_MS, Math.round(total / SMOOTH_PX_PER_MS)))
+  const startAt = Date.now()
+  const reduce = typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (reduce) {
+    port.scrollTop = goal
+    return Promise.resolve()
+  }
+  return new Promise<void>((resolve) => {
+    const frame = (): void => {
+      const t = Math.min(1, (Date.now() - startAt) / duration)
+      // easeInOutCubic：起步与收尾都软，中段快
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+      port.scrollTop = Math.round(from + distance * eased)
+      if (t >= 1) {
+        port.scrollTop = goal
+        resolve()
+        return
+      }
+      requestAnimationFrame(frame)
+    }
+    requestAnimationFrame(frame)
+  })
+}
+
+/** 气泡 → 该气泡在飞的闪烁定时器（重复跳转同一节点时先撤销上一轮） */
+const flashTimers = new WeakMap<HTMLElement, number[]>()
+/** 气泡 → 闪烁前的真实原色。必须在清定时器/改色**之前**记录：
+ *  否则闪烁中途重复跳同一节点会把主题色误当成原色，气泡永久染色。 */
+const flashOriginals = new WeakMap<HTMLElement, string>()
+
+/** 跳转确认高亮：目标气泡进入视口后闪两轮主题色 */
+function flashTarget(row: HTMLElement): void {
+  const bubble = row.querySelector<HTMLElement>('[class*="bubble"]')
+    ?? row.querySelector<HTMLElement>('[class*="messageBody"], [class*="bubbleBody"]')
+  if (bubble === null) return
+  const original = flashOriginals.get(bubble) ?? bubble.style.background
+  flashOriginals.set(bubble, original)
+  for (const timer of flashTimers.get(bubble) ?? []) window.clearTimeout(timer)
+  const themeBg = 'color-mix(in srgb, var(--dsw-alias-brand-primary) 38%, transparent)'
+  bubble.style.transition = 'background 350ms ease'
+  const paint = (on: boolean): void => { bubble.style.background = on ? themeBg : original }
+  const timers: number[] = []
+  flashTimers.set(bubble, timers)
+  // 轮询等待气泡可见（进入滚动容器视口）；1.2s 兜底后也执行
+  let tries = 0
+  const check = (): void => {
+    if (inViewportOf(scrollportOf(), bubble) || tries > 12) {
+      paint(true)
+      timers.push(window.setTimeout(() => paint(false), 400))
+      timers.push(window.setTimeout(() => paint(true), 800))
+      timers.push(window.setTimeout(() => {
+        paint(false)
+        bubble.style.transition = ''
+        flashTimers.delete(bubble)
+        flashOriginals.delete(bubble)
+      }, 1200))
+      return
+    }
+    tries += 1
+    timers.push(window.setTimeout(check, 100))
+  }
+  check()
+}
+
+/**
+ * 在已渲染的聊天行中按锚点查找目标行。
+ * - 只认**可见**行（对齐官方 anchorElement 的 `:not([hidden])`）：隐藏行的矩形退化，
+ *   拿它落位会写出一串垃圾 scrollTop；
+ * - 先精确匹配 data-chat-anchor-key；未命中再按「包含」兜底（key 为完整锚点串）；
+ * - seq: 前缀的兜底 key 取最后一个匹配（防误命中前一行）。
+ */
+function locateRow(key: string): HTMLElement | null {
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-chat-anchor-key]:not([hidden])'))
+  for (const row of rows) {
+    if (row.dataset.chatAnchorKey === key) return row
+  }
+  for (const row of rows) {
+    const candidate = row.dataset.chatAnchorKey
+    if (candidate !== undefined && candidate.includes(key)) return row
+  }
+  if (key.startsWith('seq:')) {
+    const seq = key.slice(4)
+    let found: HTMLElement | null = null
+    for (const row of rows) {
+      const candidate = row.dataset.chatAnchorKey
+      if (candidate !== undefined && candidate.includes(seq)) found = row
+    }
+    if (found !== null) return found
+  }
+  return null
+}
+
 /** Map the session snapshot to the jump-loop port surface. */
 function jumpPortsFor(ctx: ClientContext, sessionId: string): JumpPorts {
   const sessions = sessionsOf(ctx)
+  const epoch = (jumpEpochs.get(sessionId) ?? 0) + 1
+  jumpEpochs.set(sessionId, epoch)
+  /** 本次跳转已闪烁过的行（定位步进不重复触发高亮） */
+  const flashed = new WeakSet<HTMLElement>()
   return {
     snap: () => {
       const binding = sessions.binding(sessionId)
@@ -152,100 +304,72 @@ function jumpPortsFor(ctx: ClientContext, sessionId: string): JumpPorts {
       if (binding === undefined) throw new Error('session unavailable')
       await binding.session.loadOlder()
     },
-    active: () => document.querySelector('[data-chat-flow]') !== null,
-    locate: (key: string) => {
-      const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-chat-anchor-key]'))
-      for (const row of rows) {
-        if (row.dataset.chatAnchorKey === key) return row
+    // 官方跳转加载器：200 条/页 + 单 promise 内推进到目标 seq。
+    // 逐页 loadOlder（50 条/页）在长会话里要翻 4 倍页数，是「加载很久仍超时」的主因。
+    // 旧快照（0.1.2 线及更早）没有该 API：这里显式缺席，由编排层降级回 loadOlder 通道
+    // （与 0.1.2 分支共用本文件时也不会因属性缺失抛 TypeError）。
+    loadThrough: typeof (sessions.binding(sessionId)?.session as { loadThrough?: unknown } | undefined)?.loadThrough === 'function'
+      ? async (seq: number) => {
+        const binding = sessions.binding(sessionId)
+        if (binding === undefined) throw new Error('session unavailable')
+        await binding.session.loadThrough(seq)
       }
-      // 包含兜底（key 为完整锚点串，唯一命中）
-      for (const row of rows) {
-        const k = row.dataset.chatAnchorKey
-        if (k !== undefined && k.includes(key)) return row
+      : undefined,
+    cancelled: () => jumpEpochs.get(sessionId) !== epoch,
+    // active 判定：对话流存在 **且** 当前视图仍是发起跳转时的那个会话——
+    // 会话切换后旧跳转不得再驱动新会话的 DOM
+    active: () => document.querySelector('[data-chat-flow]') !== null
+      && (sessions.binding(sessionId) !== undefined),
+    locate: (key: string) => locateRow(key),
+    inView: (row) => inViewportOf(scrollportOf(), row),
+    /**
+     * 滚动落位（同步原语，最终落位由编排层的 settleOnRow 校验重试）。
+     *
+     * 一律走「瞬时赋值 scrollTop」：官方 ChatView 的贴底跟随判定是「距底 25px 内」，
+     * 旧的 2px 微调根本脱离不了该区间，随后的 prepend 补偿就把滚动拉了回去
+     * （现象：向上滚了一点就停住、到不了目标）。瞬时大跨度位移一次性脱离该区间，
+     * 同时不会被 smooth 动画中途打断（smooth 期间 scrollTop 停在起点，
+     * 既会误判「已到边界」，也会让校验读到过期位置）。
+     *
+     * locate 只做定位，不触发确认高亮；reveal 触发一次确认高亮（每行每次跳转一次）。
+     */
+    /**
+     * 最终落位 + 确认高亮。
+     *
+     * 平滑模式用自己的逐帧动画（`animateScrollTop`）而不是原生
+     * `scrollTo({behavior:'smooth'})`：长距离时后者时长封顶、几百毫秒糊过上万像素，
+     * 且会被官方的阅读位补偿中途打断（表现为"先冲过头再退回"）。逐帧写绝对插值则
+     * 整体单调，补偿的偏差下一帧即被覆盖。返回的 promise 在动画结束时 resolve，
+     * 编排层据此立即校验。
+     */
+    settle: (row, mode) => {
+      const port = scrollportOf()
+      const behavior = mode === 'smooth' ? 'smooth' : 'instant'
+      if (port === null) {
+        row.scrollIntoView({ behavior: behavior === 'smooth' ? 'smooth' : 'instant', block: 'start' })
+        return
       }
-      // seq 兜底：取最后一个匹配（防误命中前一行）
-      if (key.startsWith('seq:')) {
-        const n = key.slice(4)
-        let found: HTMLElement | null = null
-        for (const row of rows) {
-          const k = row.dataset.chatAnchorKey
-          if (k !== undefined && k.includes(n)) found = row
-        }
-        if (found !== null) return found
+      const top = Math.max(0, Math.round(port.scrollTop + rowOffset(port, row) - REVEAL_GAP))
+      // 落位即触发一次确认高亮（每行每次跳转一次）
+      if (!flashed.has(row)) {
+        flashed.add(row)
+        flashTarget(row)
       }
-      return null
+      if (behavior === 'instant') {
+        // 直接写 scrollTop 即为瞬时（容器样式产物里没有 scroll-behavior:smooth）
+        port.scrollTop = top
+        return
+      }
+      return animateScrollTop(port, top)
     },
-    reveal: (row, mode) => {
-      // 目标行顶部与视口顶留 12px 间距（不贴顶，视觉更舒适）
-      const scrollToRow = (): void => {
-        const port = document.querySelector<HTMLElement>('[data-conversation-scroll]')
-        if (port !== null) {
-          // 贴底跳转：官方「回到底部」跟随会把平滑滚动拉回底部，离底部近的轮次（如倒数
-          // 第五轮）因此定位失败。平滑模式下若当前在底部，首帧先向上移 2px 脱离贴底判定，
-          // 再走原滚动逻辑（rowTop 按绝对位置计算，与这 2px 无关）。
-          if (mode === 'smooth' && port.scrollHeight - port.scrollTop - port.clientHeight <= 1) {
-            port.scrollBy({ top: -2 })
-          }
-          const rowTop = row.getBoundingClientRect().top - port.getBoundingClientRect().top + port.scrollTop
-          port.scrollTo({ top: rowTop - 12, behavior: mode })
-        } else {
-          row.scrollIntoView({ behavior: mode, block: 'start' })
-        }
-      }
-      scrollToRow()
-      // 正文在 loadOlder prepend 落地后可能自动滚回底部（跟随滚动）：
-      // 校验式重滚——仅当目标行明显偏离视口顶（被正文回滚/未到位）才重滚，
-      // 用户主动滚动阅读时不干预
-      const ensure = (): void => {
-        const port = document.querySelector<HTMLElement>('[data-conversation-scroll]')
-        if (port === null) return
-        const rowRect = row.getBoundingClientRect()
-        const portRect = port.getBoundingClientRect()
-        const offset = rowRect.top - portRect.top
-        if (offset < -60 || offset > 120) scrollToRow()
-      }
-      window.setTimeout(ensure, 300)
-      window.setTimeout(ensure, 800)
-      // 跳转确认高亮：监听目标气泡**进入视口（可见）**后才开始闪烁；
-      // 背景经 transition 平滑渐变（非突兀切换），主题色两轮缓慢变化
-      const bubble = row.querySelector<HTMLElement>('[class*="bubble"]')
-        ?? row.querySelector<HTMLElement>('[class*="messageBody"], [class*="bubbleBody"]')
-      if (bubble !== null) {
-        const original = bubble.style.background
-        const themeBg = 'color-mix(in srgb, var(--dsw-alias-brand-primary) 38%, transparent)'
-        bubble.style.transition = 'background 350ms ease'
-        const paint = (on: boolean): void => {
-          bubble.style.background = on ? themeBg : original
-        }
-        // 轮询等待气泡可见（进入滚动容器视口）；4s 兜底后也执行
-        const waitVisible = (): Promise<void> => new Promise((resolve) => {
-          const port = document.querySelector<HTMLElement>('[data-conversation-scroll]')
-          let tries = 0
-          const check = (): void => {
-            const r = bubble.getBoundingClientRect()
-            const portTop = port !== null ? port.getBoundingClientRect().top : 0
-            const portBottom = port !== null ? port.getBoundingClientRect().bottom : window.innerHeight
-            if ((r.bottom > portTop && r.top < portBottom) || tries > 40) resolve()
-            else {
-              tries += 1
-              window.setTimeout(check, 100)
-            }
-          }
-          check()
-        })
-        void waitVisible().then(() => {
-          // 两轮切换共约 1.5s：渐变到主题色 → 渐变回 → 再切 → 再回
-          paint(true)
-          window.setTimeout(() => paint(false), 400)
-          window.setTimeout(() => paint(true), 800)
-          window.setTimeout(() => paint(false), 1200)
-          window.setTimeout(() => { bubble.style.transition = '' }, 1500)
-        })
-      }
-    },
-    scrollport: () => document.querySelector<HTMLElement>('[data-conversation-scroll]'),
+    scrollport: () => scrollportOf() as HTMLElement,
     now: () => Date.now(),
     sleep: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
+    /** 让出一帧：一次扩窗会新增数百行，实时轮询期间交给浏览器绘制 */
+    pause: () => new Promise((resolve) => {
+      if (typeof requestAnimationFrame !== 'function') { resolve(); return }
+      requestAnimationFrame(() => resolve())
+    }),
   }
 }
 
@@ -263,6 +387,7 @@ interface ChatRowSourceLike {
   visibility?: unknown
   kind?: unknown
   seq?: number
+  location?: unknown
   data?: unknown
 }
 
@@ -300,10 +425,10 @@ function chatFaceOf(ctx: ClientContext, sessionId: string): {
 }
 
 /**
- * 当前会话窗口内的聊天行（0.1.2 线：ui-conversation chat target；0.1.1 线：
- * session 快照 chat.nodes——防御性保留，0.1.2 分支实际走前者）。
+ * 当前会话窗口内的**全部**聊天行（不做 kind 过滤）。
+ * 0.1.2 线走 ui-conversation chat target；0.1.1 线回退 session 快照 chat.nodes。
  */
-function chatRowsOf(ctx: ClientContext, sessionId: string): ChatRowLike[] {
+function allChatRows(ctx: ClientContext, sessionId: string): ChatRowLike[] {
   const chat = chatFaceOf(ctx, sessionId)
   if (chat !== undefined) {
     try {
@@ -318,13 +443,14 @@ function chatRowsOf(ctx: ClientContext, sessionId: string): ChatRowLike[] {
           : ((snap.legacy?.nodes ?? []) as readonly ChatRowSourceLike[])
         const rows: ChatRowLike[] = []
         for (const node of sourceNodes) {
-          const kind = node.kind
-          if (kind !== 'user' && kind !== 'steering') continue
           rows.push({
             key: typeof node.key === 'string' ? node.key : 'seq:' + (node.seq ?? 0),
             anchorSeq: typeof node.anchorSeq === 'number' ? node.anchorSeq : (node.seq ?? 0),
+            seq: typeof node.seq === 'number' ? node.seq : undefined,
             visibility: typeof node.visibility === 'string' ? node.visibility : undefined,
-            kind,
+            kind: typeof node.kind === 'string' ? node.kind : undefined,
+            // 必须带上 location：回合归属判定依赖它（漏搬会让「已加载回合」恒为空集）
+            location: node.location,
             // view node：data 为 UserMessageNode 记录；legacy node：节点自身即记录
             data: (typeof node.data === 'object' && node.data !== null ? node.data : node) as RowPayload,
           })
@@ -338,6 +464,74 @@ function chatRowsOf(ctx: ClientContext, sessionId: string): ChatRowLike[] {
   const snap = sessionsOf(ctx).binding(sessionId)?.session.getSnapshot()
   if (snap === undefined || snap.chat?.nodes === undefined) return []
   return [...(snap.chat.nodes.values() as unknown as Iterable<ChatRowLike>)]
+}
+
+/**
+ * 行所属回合号。
+ * 主路径与官方 locationCoordinates 同构：location.turn.turn；
+ * 兜底用节点载荷自带的 turn（助手/工具行都带），避免字段形态差异导致全部丢失。
+ */
+function turnOf(node: { location?: unknown; data?: unknown }): number | null {
+  const location = node.location
+  if (typeof location === 'object' && location !== null) {
+    const nested = (location as { turn?: { turn?: unknown } }).turn
+    if (typeof nested?.turn === 'number') return nested.turn
+  }
+  const payload = node.data
+  if (typeof payload === 'object' && payload !== null) {
+    const turn = (payload as { turn?: unknown }).turn
+    if (typeof turn === 'number') return turn
+  }
+  return null
+}
+
+/** 判定输入行（结构型；标记来自聊天视图/旧快照的并集） */
+export interface LoadedTurnRow {
+  visibility?: string
+  kind?: string
+  location?: unknown
+  data?: unknown
+}
+
+/**
+ * 已加载回合判定（纯函数，便于单测）。
+ *
+ * 语义：导航点代表**该轮的用户提问**，所以「已加载」= 该提问的气泡在当前窗口里
+ * 真实存在，即该回合有**可见的提问行**（kind === 'user'）。
+ *
+ * 为什么不用官方那条「该回合存在可见节点」：官方判据允许「助手/工具行在窗口内、
+ * 用户气泡还在窗口外」的**半截回合**算已加载；那种回合的点画成短横线，用户点下去
+ * 却找不到自己的提问。
+ *
+ * @param indexed - 官方索引给出的回合号（navigation.items()）
+ * @param rows - 当前窗口里的聊天行
+ * @returns 已加载回合集合
+ *
+ * 回退纪律（两次线上回归换来的）：
+ *  - 若窗口里**任何**提问行都取不到（字段口径不符、或该会话确实没有用户消息记录），
+ *    保持索引原样——绝不退化成「所有轮次都是未加载」；
+ *  - 若索引本身为空（旧快照没有 navigation），则按可见提问行直接重建，
+ *    此时没有可信的枚举口径可用。
+ */
+export function loadedTurnsOf(indexed: Iterable<number>, rows: Iterable<LoadedTurnRow>): Set<number> {
+  const turns = new Set(indexed)
+  const visibleQuestions = new Set<number>()
+  let questionsSeen = 0
+  for (const row of rows) {
+    if (row.kind !== 'user' || row.visibility === 'hidden') continue
+    const turn = turnOf(row)
+    if (turn === null) continue
+    questionsSeen += 1
+    visibleQuestions.add(turn)
+  }
+  if (questionsSeen === 0) return turns          // 无提问行证据：保持索引原样
+  if (turns.size === 0) return visibleQuestions  // 无索引可依：按提问行重建
+  return visibleQuestions
+}
+
+/** 窗口内的提问行（提问 kind 过滤；标记与跳转锚点用） */
+function chatRowsOf(ctx: ClientContext, sessionId: string): ChatRowLike[] {
+  return allChatRows(ctx, sessionId).filter((row) => QUESTION_KINDS.includes(row.kind ?? ''))
 }
 
 /**
@@ -358,7 +552,6 @@ function createInject(ctx: ClientContext, settings: NavSettingsController): NavI
   const sessions = sessionsOf(ctx)
   return {
     readQuestions: (sessionId) => extractQuestionRows(chatRowsOf(ctx, sessionId)),
-    subscribeList: (cb) => sessions.list.subscribe(cb),
     subscribeContent: (sessionId, cb) => {
       // 会话生命周期变更 + 0.1.2 线对话行变更（chat target）双订阅；
       // 任一变化都触发内容重读（投影主路径 + 活窗口兜底）
@@ -371,10 +564,12 @@ function createInject(ctx: ClientContext, settings: NavSettingsController): NavI
       return () => { for (const off of subs) off() }
     },
     questionProjection: (sessionId) => navProjectionOf(ctx, sessionId),
+    // 已加载回合：判定规则见 loadedTurnsOf（该回合的提问行是否在当前窗口可见）
+
     navLoadedTurns: (sessionId) => {
       const chat = chatFaceOf(ctx, sessionId)
       const items = chat?.getSnapshot?.()?.navigation?.items?.() ?? []
-      return new Set(items.map((item) => item.turn))
+      return loadedTurnsOf(items.map((item) => item.turn), allChatRows(ctx, sessionId))
     },
     subscribeNavLoadedTurns: (sessionId, cb) => {
       const chat = chatFaceOf(ctx, sessionId)
@@ -382,16 +577,23 @@ function createInject(ctx: ClientContext, settings: NavSettingsController): NavI
       return chat.subscribe(cb)
     },
     jump: (sessionId, key, seq, currentSeq) => {
+      // 末次落位的动画方式在跳转**发起时**固定：跳转途中改设置不影响在飞的跳转
+      const mode = settings.getSnapshot().scrollBehavior
       const ports = jumpPortsFor(ctx, sessionId)
       ports.report = (code: JumpFailureCode) => {
         // Surface the failure through the component via a DOM event the
         // strip listens for; simplest reliable cross-boundary channel here.
         window.dispatchEvent(new CustomEvent('mega-chat-nav:jump-failed', { detail: code }))
       }
-      ports.onLoading = (loading: boolean, pages: number) => {
-        window.dispatchEvent(new CustomEvent('mega-chat-nav:jump-loading', { detail: { loading, pages } }))
+      ports.onLoading = (loading: boolean) => {
+        window.dispatchEvent(new CustomEvent('mega-chat-nav:jump-loading', { detail: { loading } }))
       }
-      void goTo(ports, key, {}, settings.getSnapshot().scrollBehavior, seq, currentSeq)
+      // 端口在会话切换等边界会抛（'session unavailable'）：转成与内部失败一致的
+      // 事件，避免静默消失（用户至少能看到失败提示）
+      void goTo(ports, key, {}, mode, seq, currentSeq)
+        .catch(() => {
+          ports.report?.('VIEW_INACTIVE')
+        })
     },
     style: () => settings.getSnapshot().style,
     setStyle: (style) => settings.setStyle(style),

@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { FocusState, NavInjected, ObservableFace, RailMarker, SessionListLike, Translate } from '../shared/types.ts'
 import { DEFAULT_ALIGN, DEFAULT_BAND, DEFAULT_CARD_COUNT, DEFAULT_CARD_ITEMS, DEFAULT_MARK_TONE, DEFAULT_PAGING, DEFAULT_SCROLL, DEFAULT_SEARCH_SCOPES, DEFAULT_SHOW, DEFAULT_STYLE, type BandHeight, type CardCount, type CardItem, type MarkTone, type NavStyle, type RailAlign, type ScrollMode, type SearchScope, type ShowMode } from '../../settings.ts'
+import { JUMP_FAILURE_KEY, type JumpFailureCode } from '../../jump.ts'
 
 /* ================= 数据装配 ================= */
 
@@ -684,9 +685,10 @@ export function useFailureNotice(t: Translate): string | null {
 
   useEffect(() => {
     const onFail = (event: Event): void => {
+      // detail 是 JumpFailureCode（'VIEW_INACTIVE' …），词条键是点分形式——
+      // 必须经映射表转换；否则所有失败都会退化成「加载历史超时」
       const code = (event as CustomEvent<string>).detail ?? 'TIMEOUT'
-      const known = ['jump.inactive', 'jump.hidden', 'jump.notfound', 'jump.timeout']
-      setNotice(t(known.includes(code) ? code : 'jump.timeout'))
+      setNotice(t(JUMP_FAILURE_KEY[code as JumpFailureCode] ?? 'jump.timeout'))
       if (timer.current !== null) window.clearTimeout(timer.current)
       timer.current = window.setTimeout(() => setNotice(null), 1800)
     }
@@ -702,19 +704,24 @@ export function useFailureNotice(t: Translate): string | null {
 
 /* ================= 加载较早记录提示 ================= */
 
-/** 监听跳转编排的扩窗加载状态，显示「正在加载较早记录以定位…（第 N 页）」 */
+/**
+ * 监听跳转编排的扩窗加载状态，显示「加载中…」。
+ *
+ * 只反映状态、不做任何计数回显：页数无法如实取得（官方 loadThrough 的页数不对外
+ * 暴露、窗口头也可能读不到），显示一个不动的数字只会误导。编排层在长加载期间会
+ * 周期性重发事件，这里的 10s 兜底计时因此会随之续期（提示不会中途消失）。
+ */
 export function useLoadingNotice(t: Translate): string | null {
-  const [state, setState] = useState<{ loading: boolean; pages: number }>({ loading: false, pages: 0 })
+  const [loading, setLoading] = useState(false)
   const timer = useRef<number | null>(null)
 
   useEffect(() => {
     const onLoading = (event: Event): void => {
-      const detail = (event as CustomEvent<{ loading: boolean; pages: number }>).detail
-      const on = detail?.loading === true
-      setState({ loading: on, pages: detail?.pages ?? 0 })
+      const on = (event as CustomEvent<{ loading?: boolean }>).detail?.loading === true
+      setLoading(on)
       if (on) {
         if (timer.current !== null) window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => setState({ loading: false, pages: 0 }), 10_000)  // 兜底：最长 10s
+        timer.current = window.setTimeout(() => setLoading(false), 10_000)  // 兜底：事件中断时自动收起
       }
     }
     window.addEventListener('mega-chat-nav:jump-loading', onLoading)
@@ -724,7 +731,7 @@ export function useLoadingNotice(t: Translate): string | null {
     }
   }, [])
 
-  return state.loading ? t('jump.loading', { n: state.pages }) : null
+  return loading ? t('jump.loading') : null
 }
 
 /* ================= 设置订阅 ================= */

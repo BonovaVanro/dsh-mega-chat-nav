@@ -28,7 +28,6 @@ export interface RailMarker {
 /** 注册注入面（client/index.ts 装配；各风格经此拿数据与动作） */
 export interface NavInjected {
   readQuestions: (sessionId: string) => { key: string; anchorSeq: number; seq: number; time: number; text: string }[]
-  subscribeList: (cb: () => void) => () => void
   subscribeContent: (sessionId: string, cb: () => void) => () => void
   questionProjection: (sessionId: string) => ObservableFace | undefined
   /** 已加载回合集合（chat 窗口内；窗口外回合为 unloaded 短横线）。session 无效返回空集 */

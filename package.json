@@ -1,6 +1,6 @@
 {
   "name": "dsh-mega-chat-nav",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.5-rc.2-update.1",
   "description": "DSH mega 系列：会话提问圆点导航条（question-nav 移植 · mgcn 族）",
   "license": "Apache-2.0",
   "homepage": "https://github.com/BonovaVanro/dsh-mega-chat-nav#readme",
@@ -37,7 +37,9 @@
     "registry": "https://registry.npmjs.org"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "clean": "node scripts/clean-lib.mjs",
+    "check:css": "node scripts/check-css.mjs",
+    "build": "node scripts/check-css.mjs && node scripts/clean-lib.mjs && tsc -p tsconfig.json && node scripts/build-client.mjs",
     "prepack": "npm run build",
     "prepare": "npm run build",
     "test": "vitest run tests"

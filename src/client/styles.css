@@ -1087,7 +1087,6 @@
 .mgcn-cxRail {
   --mgcn-cx-width-idle: 12px;
   --mgcn-cx-width-current: 18px;
-  --mgcn-cx-width-hover: 38px;
 }
 /* 色调变量：仅颜色与不透明度按 data-tone 切换（deep 高对比，为默认） */
 .mgcn-cxRail[data-tone='soft'] {
@@ -1097,25 +1096,12 @@
   --mgcn-cx-mark-idle-op: 0.34;
   --mgcn-cx-current-bg: var(--dsw-alias-brand-primary);
   --mgcn-cx-current-op: 0.62;
-  --mgcn-cx-ripple-bg: var(--dsw-alias-label-secondary);
-  --mgcn-cx-ripple-op: 0.75;
 }
 .mgcn-cxRail[data-tone='deep'] {
   --mgcn-cx-mark-bg: var(--dsw-alias-label-secondary);
   --mgcn-cx-mark-idle-op: 0.62;
   --mgcn-cx-current-bg: var(--dsw-alias-brand-primary);
   --mgcn-cx-current-op: 0.92;
-  --mgcn-cx-ripple-bg: var(--dsw-alias-label-primary);
-  --mgcn-cx-ripple-op: 0.88;
-}
-/* 兼容缺省（未设置 data-tone）：走深邃档 */
-.mgcn-cxRail:not([data-tone='soft']) {
-  --mgcn-cx-mark-bg: var(--dsw-alias-label-secondary);
-  --mgcn-cx-mark-idle-op: 0.62;
-  --mgcn-cx-current-bg: var(--dsw-alias-brand-primary);
-  --mgcn-cx-current-op: 0.92;
-  --mgcn-cx-ripple-bg: var(--dsw-alias-label-primary);
-  --mgcn-cx-ripple-op: 0.88;
 }
 
 /* 刻度条：锚定在外侧缘（rail 在对话左→锚左缘；右→锚右缘），朝对话方向展开 */
@@ -1141,15 +1127,6 @@
 /* 波纹邻居：较本尊淡一档（hover 级联为纯 CSS，JS 不再逐槽驱动） */
 .mgcn-cxSlot .mgcn-cxMark {
   background: var(--mgcn-cx-mark-bg, var(--dsw-alias-label-secondary));
-}
-/* 未加载历史回合（unloaded）：超短横线（官方 markUnloaded 同款：8px 短 + 低透明） */
-.mgcn-hsTick.mgcn-hsTickUnloaded .mgcn-hsTickBar {
-  width: 8px;
-  opacity: calc(var(--mgcn-hs-mark-idle-op, 0.62) * 0.85);
-}
-.mgcn-hsTick.mgcn-hsTickUnloaded:hover .mgcn-hsTickBar,
-.mgcn-hsTick.mgcn-hsTickUnloaded:focus-visible .mgcn-hsTickBar {
-  width: 18px;
 }
 
 /* 阅读位置（current）：常亮品牌色、略长 */
@@ -1733,8 +1710,7 @@ nav:has(> [class*="_scroller"]) {
   --mgcn-hs-ripple-bg: var(--dsw-alias-label-secondary);
   --mgcn-hs-ripple-op: 0.75;
 }
-.mgcn-hsRail[data-tone='deep'],
-.mgcn-hsRail:not([data-tone='soft']) {
+.mgcn-hsRail[data-tone='deep'] {
   --mgcn-hs-mark-bg: var(--dsw-alias-label-secondary);
   --mgcn-hs-mark-idle-op: 0.62;
   --mgcn-hs-current-bg: var(--dsw-alias-brand-primary);
@@ -1743,8 +1719,11 @@ nav:has(> [class*="_scroller"]) {
   --mgcn-hs-ripple-op: 0.88;
 }
 
-/* 刻度条：短横 tick（idle 短灰 → current 品牌常亮 → hover 波纹展开） */
+/* 刻度条：短横 tick（idle 短灰 → current 品牌常亮 → hover 波纹展开）
+   --mgcn-hs-ripple-k：本条的波纹倍率（默认 1）。波纹各级宽度 = 基准档 × k，
+   于是"未加载"这类更短的刻度可以整族等比收窄，被 hover 的那条依旧最长。 */
 .mgcn-hsTickBar {
+  --mgcn-hs-ripple-k: 1;
   position: absolute;
   top: 50%;
   width: 12px;
@@ -1772,27 +1751,38 @@ nav:has(> [class*="_scroller"]) {
   opacity: var(--mgcn-hs-current-op, 0.92);
 }
 
+/* 未加载历史回合（unloaded）：超短横线（官方 markUnloaded 同款：8px 短 + 低透明）。
+   声明在 hover 波纹**之前**，让波纹以"后来者胜"接管宽度；并把波纹倍率设为 8/12，
+   整族因此等比收窄：本尊 25px、邻居 20/14/10/8px——被 hover 的那条始终最长。
+   反例（曾出现）：给本尊一个固定放大值 18px，而邻居按 30px 计，于是
+   「被 hover 的超短横线反而比下一条短」，该规则已删除。 */
+.mgcn-hsTick.mgcn-hsTickUnloaded .mgcn-hsTickBar {
+  --mgcn-hs-ripple-k: 0.6667;   /* 8 / 12 */
+  width: 8px;
+  opacity: calc(var(--mgcn-hs-mark-idle-op, 0.62) * 0.85);
+}
+
 /* hover 波纹：本尊 38px 实色；邻居逐级收短 30/21/15px（纯 CSS :has 级联） */
 .mgcn-hsTick:hover .mgcn-hsTickBar,
 .mgcn-hsTick:focus-visible .mgcn-hsTickBar {
-  width: 38px;
+  width: calc(38px * var(--mgcn-hs-ripple-k));
   background: var(--mgcn-hs-ripple-bg, var(--dsw-alias-label-primary));
   opacity: var(--mgcn-hs-ripple-op, 0.88);
 }
 .mgcn-hsTick:hover ~ .mgcn-hsTick .mgcn-hsTickBar {
-  width: 30px;
+  width: calc(30px * var(--mgcn-hs-ripple-k));
   opacity: calc(var(--mgcn-hs-ripple-op, 0.88) * 0.72);
 }
 .mgcn-hsTick:hover ~ .mgcn-hsTick ~ .mgcn-hsTick .mgcn-hsTickBar {
-  width: 21px;
+  width: calc(21px * var(--mgcn-hs-ripple-k));
   opacity: calc(var(--mgcn-hs-ripple-op, 0.88) * 0.52);
 }
 .mgcn-hsTick:hover ~ .mgcn-hsTick ~ .mgcn-hsTick ~ .mgcn-hsTick .mgcn-hsTickBar {
-  width: 15px;
+  width: calc(15px * var(--mgcn-hs-ripple-k));
   opacity: calc(var(--mgcn-hs-ripple-op, 0.88) * 0.36);
 }
 .mgcn-hsTick:hover ~ .mgcn-hsTick ~ .mgcn-hsTick ~ .mgcn-hsTick ~ .mgcn-hsTick .mgcn-hsTickBar {
-  width: 12px;
+  width: calc(12px * var(--mgcn-hs-ripple-k));
   opacity: calc(var(--mgcn-hs-ripple-op, 0.88) * 0.24);
 }
 

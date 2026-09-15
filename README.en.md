@@ -112,19 +112,19 @@ On screens narrower than 1024px, the nav strip is lightened to a search-only aff
 **npm**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2-update.1
 ```
 
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2-update.1
 ```
 
 **Local package**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2.tgz
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2-update.1.tgz
 ```
 
 Uninstall:

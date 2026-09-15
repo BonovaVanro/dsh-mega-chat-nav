@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.1.5-rc.2-update.1（长会话跳转 + 虎鲸刻度）
+
+[中文](#cn-v0.1.5-rc.2-update.1) | [English](#en-v0.1.5-rc.2-update.1)
+
+本版本修复**长会话里往前跳转**的老问题——加载很久还提示超时、跳过去不到位；同时修正虎鲸（Harness）风格刻度的未加载显示。
+
+<h3 id="cn-v0.1.5-rc.2-update.1">问题修复</h3>
+
+- **跳转会超时**：长会话往前跳几十轮时，历史要一页页拉，中途还老提示「加载历史超时」。现在加载快得多（一次拉的量是原来的 4 倍），只要还在往目标推进就不会被判超时，提示也不会中途消失；如果正文自己正在加载，跳转会接上去而不是干等。
+- **跳过去没到位**：有时往上跳一点就停住、或先冲过一屏再退回。现在会一直平滑地滚到目标行，长距离也不会先跳一下再补动画；落位后会确认真的停稳，没停稳就校正——落位过程不再出现忽上忽下。
+- **动画设置无效**：设置里选「平滑」以前经常没效果（直接瞬移）。现在按设置生效：平滑就是一路滚过去，瞬时就是直接到位。
+- **失败提示全是「超时」**：不管是没找到、还是视图不可用，以前一律显示「加载历史超时」。现在各自显示对应原因；已经落到邻近内容时算跳转成功，不再报错。
+- **虎鲸刻度把没加载的轮次画成已加载**：包括末尾那个还没加载的轮次，以及「只加载了一半」（正文进来了、你的提问还在更早历史里）的轮次。现在只有该轮提问真的在当前内容里，才显示为已加载。
+- **虎鲸刻度未加载的短横线长度不对**：悬停时不会变长，被旁边刻度带动时也不会跟着收窄，看起来比旁边的横线短一截，甚至出现「悬停的这条比下一条还短」。现在长度按比例变化，悬停时始终是最长的那条。
+
+新增 36 条自动化测试，全量 108 条通过。
+
+<h3 id="cn-v0.1.5-rc.2-update.1">体验优化</h3>
+
+- 往前跳转时的中间滚动更快、等待更少。
+- 加载提示简化为「加载中…」，不再显示一个不会变化的页码。
+- 跳转目标的闪烁提示每次跳转只出现一次，不会在滚动过程中反复闪。
+
+<h3 id="en-v0.1.5-rc.2-update.1">Bug fixes</h3>
+
+This release fixes long-standing problems with **jumping backwards in long sessions** — loading that ended in a timeout, and jumps that fell short — and corrects how the Harness style shows unloaded turns.
+
+- **Jumps timed out**: jumping dozens of turns back paged history one small chunk at a time and often ended in a "loading history timed out" message. Loading is now much faster (each step pulls 4× as much), a jump is no longer declared timed out while it is still making progress, the notice no longer disappears mid-load, and a jump now joins an in-flight load instead of waiting for it.
+- **Jumps fell short or overshot**: the view sometimes stopped just above the target, or flew past and snapped back. It now scrolls smoothly all the way to the target — long distances included, with no jump-then-correct — and confirms it actually settled, correcting itself if not.
+- **The animation setting did nothing**: choosing "smooth" often behaved like an instant jump. The setting now applies: smooth scrolls there, instant jumps there.
+- **Every failure said "timed out"**: missing targets and inactive views all reported a timeout. Each failure now reports its own reason, and landing on nearby content counts as success instead of an error.
+- **Harness rail marked unloaded turns as loaded**: this covered both the last not-yet-loaded turn and "half-loaded" turns whose answer had arrived while the question was still in earlier history. A turn now counts as loaded only when its question is really in the current content.
+- **Harness unloaded ticks had the wrong length**: they did not grow on hover and did not shrink with their neighbours, so they looked shorter than the lines beside them — a hovered one could even end up shorter than the next one. Lengths now scale proportionally, and the hovered tick is always the longest.
+
+36 new automated tests; all 108 pass.
+
+<h3 id="en-v0.1.5-rc.2-update.1">Improvements</h3>
+
+- Intermediate scrolling while jumping back is faster, with less waiting.
+- The loading notice is simply "Loading…" — no page number that never changes.
+- The confirmation flash on the target appears once per jump instead of repeating during the scroll.
+
 ## 0.1.5-rc.2（适配 dsh v0.1.5-rc.\*）
 
 [中文](#cn-v0.1.5-rc.2) | [English](#en-v0.1.5-rc.2)
