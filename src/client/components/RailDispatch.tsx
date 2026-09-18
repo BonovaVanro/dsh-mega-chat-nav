@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { NavStyle } from '../settings.ts'
 import { DEFAULT_STYLE } from '../settings.ts'
-import type { NavInjected, SessionSelector, Translate } from './shared/types.ts'
+import type { NavInjected, Translate } from './shared/types.ts'
 import { MinimalRail } from './minimal/MinimalRail.tsx'
 import { CodexRail } from './codex/CodexRail.tsx'
 import { DeepseekRail } from './deepseek/DeepseekRail.tsx'
@@ -11,7 +11,6 @@ import { HarnessRail } from './harness/HarnessRail.tsx'
 
 export interface RailDispatchProps {
   injected: NavInjected | undefined
-  useSessions?: SessionSelector
   t: Translate
 }
 
@@ -21,7 +20,7 @@ export function RailDispatch(props: RailDispatchProps): ReactNode {
     if (props.injected === undefined) return
     return props.injected.subscribeSettings(() => setStyle(props.injected?.style() ?? DEFAULT_STYLE))
   }, [props.injected])
-  const railProps = { injected: props.injected, useSessions: props.useSessions, t: props.t }
+  const railProps = { injected: props.injected, t: props.t }
   if (style === 'codex') return <CodexRail {...railProps} />
   if (style === 'deepseek') return <DeepseekRail {...railProps} />
   if (style === 'harness') return <HarnessRail {...railProps} />

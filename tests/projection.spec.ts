@@ -77,9 +77,22 @@ describe('投影折叠（msgNavMessages）', () => {
     expect(unit.apply(state, question(8, 'y', 'ctx', { sourceKind: 'agent' }))).toBe(state)
   })
 
-  it('无 turn/start 的早期提问归 turn 0', () => {
+  it('无 turn/start 的提问不收录（与官方 turnOutline 同口径：节点只由 turn/start 建立）', () => {
     const state = fold([question(1, 'early', 'pre-turn')])
-    expect(state.questions[0]?.turn).toBe(0)
+    expect(state.questions).toEqual([])
+    // 且不产生新状态引用（Object.is 闸门）
+    expect(unit.apply(state, question(2, 'early-2', 'pre-turn-2'))).toBe(state)
+  })
+
+  it('第一条发出即被打断、第二条正常运行：只有后者成节点', () => {
+    // 第一条 user/message 之后没有任何 turn/start → 无归属回合，不收录
+    const state = fold([question(1, 'first', 'interrupted'), turnStart(1, 20), question(25, 'second', 'real')])
+    expect(state.questions.map((q) => [q.turn, q.id])).toEqual([[1, 'second']])
+  })
+
+  it('同回合内的追加提问仍归该回合（不额外建节点，交由装配层合并）', () => {
+    const state = fold([turnStart(1, 4), question(7, 'a', 'open'), question(9, 'b', 'steering')])
+    expect(state.questions.map((q) => [q.turn, q.id])).toEqual([[1, 'a'], [1, 'b']])
   })
 
   it('无文本块时 text 为空串', () => {
@@ -101,5 +114,9 @@ describe('投影折叠（msgNavMessages）', () => {
   it('stateVersion 非负整数', () => {
     expect(Number.isInteger(unit.stateVersion)).toBe(true)
     expect(unit.stateVersion).toBeGreaterThanOrEqual(0)
+  })
+
+  it('stateVersion 已升到 3（旧缓存行需按新收录规则重折叠）', () => {
+    expect(unit.stateVersion).toBe(3)
   })
 })

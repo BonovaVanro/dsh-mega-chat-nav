@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.1.5-rc.2-update.2（适配 dsh v0.1.6-alpha.2）
+
+[中文](#cn-v0.1.5-rc.2-update.2) | [English](#en-v0.1.5-rc.2-update.2)
+
+官方在 **0.1.6-alpha.2** 里移除了 `SessionListState.current`，导航条一直用它取「当前是哪个会话」，因此在 0.1.6-alpha.2 上整个不再显示。本版本改按官方对外提供的写法取值，在 0.1.5-rc 与 0.1.6-alpha.2 上行为一致、共用同一份安装包。
+
+<h3 id="cn-v0.1.5-rc.2-update.2">问题修复</h3>
+
+- **dsh 0.1.6-alpha.2 上导航条整个不显示**：插件原本从会话列表快照的 `SessionListState.current` 读当前会话，官方在 0.1.6-alpha.2 里把它移除了（连同 `currentAddress`），插件读不到会话就什么都不画。现改用官方对外提供的 `sessionId`——会话作用域槽位由框架注入，官方自带的回合导航轨也用它。
+
+<h3 id="cn-v0.1.5-rc.2-update.2">对 0.1.5-rc.2 的影响</h3>
+
+- 新写法在 0.1.5-rc 上同样成立（该接口两版一致），因此**直接迁移自 0.1.5 线**，无需为 0.1.6-alpha.2 单独出包；上面这个问题也只发生在 0.1.6-alpha.2 上。
+- 导航条的数据、跳转、搜索等逻辑均未改动，**0.1.5-rc.2 功能与上一版一致**。
+
+<h3 id="cn-v0.1.5-rc.2-update.2">兼容性校验开关</h3>
+
+- 按 mega 家族约定支持 mega 设置页的「mega 系插件兼容性校验」开关：关闭后本插件启动时不再校验 dsh 版本、也不再打印提醒。
+- **未安装 mega-settings 时同样有效**：此时改为直接读设置文档的 `mega-settings.compatCheck`，你手写的配置一样会被尊重。
+- 两处都读不到时按缺省**照常校验**——宁可多提醒一次，也不因读不到配置而漏掉不兼容警示。
+
+<h3 id="cn-v0.1.5-rc.2-update.2">导航条高亮修正</h3>
+
+- **导航条没有任何节点被高亮**：当前内容窗口里只剩助手回复与插入消息（提问已滚出上方）时，导航条整条不亮。现在会按「读到第几轮」落到对应节点，不再无高亮。
+- **插入消息命中却不亮**：同回合里运行中追加的那条插入消息，被判定为命中时却仍无节点高亮——现在会点亮**它所属回合**的节点（点击仍定位到该回合首条提问，与之前一致）。
+
+dsh **0.1.6-alpha.2** removed `SessionListState.current`, which the rail had been using to find the current session, so the rail stopped appearing on 0.1.6-alpha.2 altogether. This release reads the session the way dsh officially provides it, behaves identically on the 0.1.5-rc line and 0.1.6-alpha.2, and ships as a single build.
+
+<h3 id="cn-v0.1.5-rc.2-update.2">体验优化</h3>
+
+- **刷新时导航条先闪到页面最左**：导航条位置由布局校准算出，首帧校准未完成时它按初始位置画在了页面最左边。现在位置算出前不绘制，就位后再淡入；刷新、切换会话、调整对齐或偏移都不再出现这一跳。
+
+<h3 id="en-v0.1.5-rc.2-update.2">Bug fixes</h3>
+
+- **The rail disappeared entirely on dsh 0.1.6-alpha.2**: the plugin used to read the current session from the session-list snapshot's `SessionListState.current`. dsh 0.1.6-alpha.2 removed that field (along with `currentAddress`), so with no session to read the rail drew nothing. It now uses the officially provided `sessionId` — injected by the framework into session-scoped slots, the same one the built-in turn navigator uses.
+
+<h3 id="en-v0.1.5-rc.2-update.2">Impact on 0.1.5-rc.2</h3>
+
+- The new way works on 0.1.5-rc as well (the interface is the same on both versions), so it was **migrated straight from the 0.1.5 line** with no separate build for 0.1.6-alpha.2; the problem above only occurs on 0.1.6-alpha.2.
+- The rail's data, jumping and search logic are untouched, so **0.1.5-rc.2 behaves exactly as in the previous version**.
+
+<h3 id="en-v0.1.5-rc.2-update.2">Compatibility check switch</h3>
+
+- The plugin now honours the mega settings page switch "mega-family compatibility check" as the family convention requires: with the switch off it skips the dsh version check and its console notice at startup.
+- **It works without mega-settings installed too**: the value is then read straight from the settings document's `mega-settings.compatCheck`, so a hand-written configuration is respected as well.
+- When neither source is readable the check still runs by default — a redundant notice is preferable to a missed incompatibility warning.
+
+<h3 id="en-v0.1.5-rc.2-update.2">Rail highlight fixes</h3>
+
+- **No node was highlighted at all**: when the current window held only an assistant reply and the inserted message (the question had scrolled above), the whole rail stayed dark. It now falls back to the turn being read and lights that node.
+- **A hit on the inserted message did not light up**: the extra message admitted into a running turn was recognised as the reading position yet no node lit. It now lights the node of **its own turn** (clicking still goes to that turn's first question, as before).
+
+<h3 id="en-v0.1.5-rc.2-update.2">Improvements</h3>
+
+- **The rail flashed at the far left on refresh**: its position is computed by the layout calibration, and until that finished it was drawn at its initial position — the left edge of the page. It is now left undrawn until the position is known and fades in once placed; refresh, session switches and alignment/offset changes no longer show the jump.
+
 ## 0.1.5-rc.2-update.1（长会话跳转 + 虎鲸刻度）
 
 [中文](#cn-v0.1.5-rc.2-update.1) | [English](#en-v0.1.5-rc.2-update.1)

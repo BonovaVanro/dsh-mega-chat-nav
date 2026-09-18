@@ -3,9 +3,10 @@
 // 节点数据形态（RailMarker）与几何常量（行距 14px）为插件自身设计——两风格行距一致，
 // 翻页步距与跟读滚动对任意风格成立（风格差异只在节点视觉与 hover 呈现）。
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import type { FocusState, NavInjected, ObservableFace, RailMarker, SessionListLike, Translate } from '../shared/types.ts'
+import type { FocusState, NavInjected, ObservableFace, RailMarker, Translate } from '../shared/types.ts'
 import { DEFAULT_ALIGN, DEFAULT_BAND, DEFAULT_CARD_COUNT, DEFAULT_CARD_ITEMS, DEFAULT_MARK_TONE, DEFAULT_PAGING, DEFAULT_SCROLL, DEFAULT_SEARCH_SCOPES, DEFAULT_SHOW, DEFAULT_STYLE, type BandHeight, type CardCount, type CardItem, type MarkTone, type NavStyle, type RailAlign, type ScrollMode, type SearchScope, type ShowMode } from '../../settings.ts'
 import { JUMP_FAILURE_KEY, type JumpFailureCode } from '../../jump.ts'
+import { useActiveSession } from '../../session-bridge.tsx'
 
 /* ================= 数据装配 ================= */
 
@@ -86,13 +87,42 @@ function buildMarkers(projected: readonly ProjectedEntry[], live: readonly LiveR
   return markers
 }
 
+/**
+ * 活动会话解析（纯函数，便于单测）：**唯一来源 = 会话作用域桥接**。
+ *
+ * 为什么只有这一条路：官方把「当前会话」移出会话服务（0.1.5-rc.2 还有
+ * `SessionListState.current`，0.1.6-alpha.2 已移除，且官方客户端组件自己一处都不读它）。
+ * 与其跟着这个字段的存废来回改，不如用官方自己的做法——会话作用域槽位由框架注入
+ * `sessionId`（见 session-bridge.tsx），该契约在 rc 线与 alpha 线一致。
+ *
+ * @param bridged - 会话作用域桥接上报的 id（空串等脏值视为缺席）
+ * @returns 活动会话 id（缺席为 undefined）
+ */
+export function resolveActiveSession(bridged: unknown): string | undefined {
+  return typeof bridged === 'string' && bridged.length > 0 ? bridged : undefined
+}
+
+/**
+ * 导航条可见性（纯函数，便于单测）：会话在 + 非空态 + 对话视图在。
+ *
+ * @param sessionId - 桥接给出的活动会话
+ * @param blank - 会话快照的 blank（新会话尚无首轮对话）
+ * @param viewOk - 对话视图探针（Trajectory 视图 / 会话未加载时为 false）
+ */
+export function railVisible(
+  sessionId: string | undefined,
+  blank: boolean,
+  viewOk: boolean,
+): boolean {
+  return sessionId !== undefined && !blank && viewOk
+}
+
 /** 圆点数据：会话可见性 + 标记装配（订阅集中管理，共用一条刷新管线） */
 export function useMarkerData(
   injected: NavInjected | undefined,
-  useSessions?: <S>(selector: (s: SessionListLike) => S) => S,
 ): { sessionId: string | undefined; visible: boolean; markers: RailMarker[] } {
-  const current = useSessions?.((s) => s.current) as string | undefined
-  const summary = useSessions?.((s) => (current === undefined ? undefined : s.byId?.[String(current)]))
+  // 活动会话：会话作用域桥接上报（订阅式，切换会话即刷新）
+  const sessionId = resolveActiveSession(useActiveSession())
   // 仅对话视图显示（[data-chat-flow] 只在对话消息流渲染；Trajectory 视图与会话未加载时不存在）
   const [viewOk, setViewOk] = useState<boolean>(() => document.querySelector('[data-chat-flow]') !== null)
   useEffect(() => {
@@ -102,17 +132,29 @@ export function useMarkerData(
     observer?.observe(document.body, { childList: true, subtree: true })
     return () => { observer?.disconnect() }
   }, [])
-  const visible = current !== undefined && summary !== undefined && summary.blank !== true && viewOk
+  // 空态判据：会话快照的 blank **必须订阅**——新会话在发出首轮前是空态、发出后必须唤出
+  // 导航条；只在渲染时读一次会漏掉这次变化（「新会话不显示，重进会话才出现」的根因）
+  const [blank, setBlank] = useState<boolean>(() => sessionId !== undefined && injected?.readBlank(sessionId) === true)
+  useEffect(() => {
+    if (sessionId === undefined || injected === undefined) {
+      setBlank(false)
+      return
+    }
+    const sync = (): void => setBlank(injected.readBlank(sessionId) === true)
+    sync()
+    return injected.subscribeBlank(sessionId, sync)
+  }, [sessionId, injected])
+  const visible = railVisible(sessionId, blank, viewOk)
   const [markers, setMarkers] = useState<RailMarker[]>([])
   const cacheRef = useRef<RailMarker[]>([])
 
   useEffect(() => {
-    if (!visible || current === undefined || injected === undefined) {
+    if (!visible || sessionId === undefined || injected === undefined) {
       cacheRef.current = []
       setMarkers([])
       return
     }
-    const face = injected.questionProjection(current)
+    const face = injected.questionProjection(sessionId)
     // 内容刷新经 rAF 合并：流式输出/历史装载时一帧内可能多次变更事件，
     // 只做一次装配（buildMarkers 遍历全量投影 + 活窗行，频繁执行会拖慢长会话）
     let raf = 0
@@ -120,7 +162,7 @@ export function useMarkerData(
       if (raf !== 0) return
       raf = requestAnimationFrame(() => {
         raf = 0
-        const next = buildMarkers(projectedEntries(face), injected.readQuestions(current) as unknown as LiveRow[])
+        const next = buildMarkers(projectedEntries(face), injected.readQuestions(sessionId) as unknown as LiveRow[])
         if (sameMarkers(next, cacheRef.current)) {
           setMarkers(cacheRef.current)
           return
@@ -131,16 +173,16 @@ export function useMarkerData(
     }
     refresh()
     const offProjection = face?.subscribe(refresh) ?? (() => {})
-    const offContent = injected.subscribeContent(current, refresh)
+    const offContent = injected.subscribeContent(sessionId, refresh)
     return () => {
       if (raf !== 0) cancelAnimationFrame(raf)
       offProjection()
       offContent()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [injected, current, visible])
+  }, [injected, sessionId, visible])
 
-  return { sessionId: current, visible, markers }
+  return { sessionId, visible, markers }
 }
 
 /* ================= 布局钉位 ================= */
@@ -208,6 +250,9 @@ function desiredGeometry(panel: HTMLElement, align: RailAlign, offset: number): 
  */
 export function usePinning(panelRef: RefObject<HTMLDivElement>, visible: boolean, align: RailAlign, offset = 0, sessionId?: string): void {
   useEffect(() => {
+    // 重新校准（挂载 / 会话切换 / 对齐变更）：先收回「已钉位」标记 → 面板淡出，
+    // 直到本次校准写入几何后再淡入（避免在新位置尚未算出时按旧位置/左上角作画）
+    panelRef.current?.removeAttribute('data-mgcn-pinned')
     let alive = true
     let observer: ResizeObserver | null = null
     let domObserver: MutationObserver | null = null
@@ -229,6 +274,10 @@ export function usePinning(panelRef: RefObject<HTMLDivElement>, visible: boolean
         || panel.style.height !== want.height
         || panel.style[want.side] !== want.edge
         || panel.style[other] !== ''
+      // 几何可用（want !== null 即目标已就位）就允许绘制——**必须同时覆盖稳定分支**：
+      // 会话切换等场景会重启校准并先摘掉标记，而此时几何往往已经正确（不走写入分支），
+      // 只在写入时打标记会让面板永远停在未绘制状态（表现为导航条不出现）
+      if (!panel.hasAttribute('data-mgcn-pinned')) panel.setAttribute('data-mgcn-pinned', '')
       if (!dirty) return 'stable'
       panel.style.top = want.top
       panel.style.height = want.height
@@ -323,18 +372,57 @@ export function usePinning(panelRef: RefObject<HTMLDivElement>, visible: boolean
  * 不会为全部轮次做几何采样。
  * 全部行仍在线下方时取最后一条（最接近视口底）。
  */
-function readingRowKey(flow: HTMLElement, portTop: number, line: number, markerSet: ReadonlySet<string>): string | null {
+/** 成员锚点 key → 所属节点的 key（同回合多条提问行指向同一节点）。 */
+export type MarkerOwnerIndex = ReadonlyMap<string, string>
+
+/** 构造 {@link MarkerOwnerIndex}（长会话避免每次采样重复展开 members）。 */
+export function markerOwnerIndex(markers: readonly RailMarker[]): MarkerOwnerIndex {
+  const index = new Map<string, string>()
+  for (const m of markers) for (const member of m.members) index.set(member, m.key)
+  return index
+}
+
+export function readingRowKey(
+  flow: HTMLElement,
+  portTop: number,
+  line: number,
+  markers: readonly RailMarker[],
+  markerOf: MarkerOwnerIndex,
+): string | null {
   let lastKey: string | null = null
-  for (const row of flow.querySelectorAll<HTMLElement>('[data-chat-anchor-key]')) {
-    const key = row.dataset.chatAnchorKey
-    if (key === undefined) continue
-    if (markerSet.has(key)) {
-      const top = row.getBoundingClientRect().top - portTop
-      if (top >= line) return key
-      lastKey = key
+  // 两级判据：
+  //  ① 锚点快路径——渲染出的提问行（含同回合的插入消息行）命中即返回**节点 key**。
+  //     必须返回节点 key：调用方按节点 key 决定高亮，返回成员自己的 key 会命中却不高亮；
+  //  ② 回合回退——视口里一条提问行都没渲染时（末尾只剩助手回复 / 插入消息的常见情形），
+  //     用行的 data-chat-turn 定位「阅读线处的所属回合」（官方 turnAtLine 同思路）。
+  let lineTurn: number | null = null
+  let tailTurn: number | null = null
+  for (const row of flow.querySelectorAll<HTMLElement>('[data-chat-anchor-key], [data-chat-turn]')) {
+    const top = row.getBoundingClientRect().top - portTop
+    const rawTurn = row.dataset.chatTurn
+    if (rawTurn !== undefined && rawTurn !== '') {
+      const turn = Number(rawTurn)
+      if (Number.isFinite(turn)) {
+        tailTurn = turn
+        if (lineTurn === null && top >= line) lineTurn = turn
+      }
     }
+    const key = row.dataset.chatAnchorKey
+    const markerKey = key === undefined ? undefined : markerOf.get(key)
+    if (markerKey === undefined) continue
+    if (top >= line) return markerKey
+    lastKey = markerKey
   }
-  return lastKey
+  if (lastKey !== null) return lastKey
+  // 阅读线处没有可用行（全在线上方）时，退到最后一条已渲染行的回合——「我读到第几轮」
+  const turn = lineTurn ?? tailTurn
+  if (turn === null) return null
+  let best: RailMarker | null = null
+  for (const m of markers) {
+    if (m.turn === null || m.turn > turn) continue
+    if (best === null || best.turn === null || m.turn > best.turn) best = m
+  }
+  return best?.key ?? null
 }
 
 /** 阅读间谍：滚动/尺寸变化按 rAF 采样行位置，标记当前所在回合。
@@ -344,9 +432,9 @@ export function useReadingSpy(visible: boolean, markers: readonly RailMarker[]):
   const [currentKey, setCurrentKey] = useState<string | null>(null)
   const currentKeyRef = useRef<string | null>(null)
   const forceKey = (key: string): void => { currentKeyRef.current = key; setCurrentKey(key) }
-  // 标记集合（members 展开一次；长会话避免每帧重复构造）
-  const markerSetRef = useRef<Set<string>>(new Set())
-  markerSetRef.current = new Set(markers.flatMap((m) => m.members))
+  // 成员→节点索引：随 markers 重建一次（不是每帧），采样只做 DOM 扫描
+  const ownerRef = useRef<MarkerOwnerIndex>(new Map())
+  ownerRef.current = markerOwnerIndex(markers)
 
   useEffect(() => {
     if (!visible || markers.length === 0) { setCurrentKey(null); return }
@@ -375,7 +463,7 @@ export function useReadingSpy(visible: boolean, markers: readonly RailMarker[]):
       }
       const portRect = scrollport.getBoundingClientRect()
       if (portRect.height <= 0) return
-      const next = readingRowKey(flow, portRect.top, 0, markerSetRef.current)
+      const next = readingRowKey(flow, portRect.top, 0, markers, ownerRef.current)
       currentKeyRef.current = next
       setCurrentKey((prev) => (prev === next ? prev : next))
     }

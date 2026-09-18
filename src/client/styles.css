@@ -13,6 +13,15 @@
   /* Overlay: let pointer events pass through to the conversation beyond the
      dots, so the embedded minimap never blocks the chat. */
   pointer-events: none;
+  /* 校准前的首帧位置还不是目标位置（基样式为 left: 0，真实位置由钉位循环写入），
+     此时先不画，避免刷新时「先在页面最左边闪一下再跳到配置位置」。
+     钉位成功写入后由 [data-mgcn-pinned] 淡入。 */
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.mgcn-rail[data-mgcn-pinned] {
+  opacity: 1;
 }
 
 /* Right-anchored rail: release the CSS `left: 0` so the inline `right`

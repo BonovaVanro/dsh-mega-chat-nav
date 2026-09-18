@@ -108,24 +108,24 @@ DSH（DeepSeek Harness）的**会话提问导航条**：在会话一侧显示整
 
 ## 安装
 
-**已适配 dsh v0.1.5-rc.\***（锁定 0.1.5 rc 线）。提供 npm / GitHub tag / 本地包三种安装方式。
+**已适配 dsh v0.1.5-rc 线**（锁定 0.1.5 rc 预发布）。提供 npm / GitHub tag / 本地包三种安装方式。
 
 **npm**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2-update.1
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2-update.2
 ```
 
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2-update.1
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2-update.2
 ```
 
 **本地包**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2-update.1.tgz
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2-update.2.tgz
 ```
 
 卸载：
@@ -147,7 +147,8 @@ dsh plugin --profile web remove dsh-mega-chat-nav
 
 ## 适用 dsh 版本与兼容性
 
-- **已适配 dsh 版本：0.1.5-rc.\*（0.1.5 rc 线通配：rc.1 / rc.2 …；不含 alpha 线与正式版；0.1.2 线由 0.1.2 分支负责，0.1.1 维护线由 0.1.1 分支负责）**；
+- **已适配 dsh 版本：0.1.5-rc 线（`0.1.5-rc.*` 通配，rc.1 / rc.2 …）**；
+- 其他版本线不在兼容承诺内；0.1.2 / 0.1.1 线分别由同名分支负责；
 - 宿主启动会按版本策略自检（默认 `= 0.1.5-rc.*`）；检测到其他版本控制台会打印
   `dsh-mega-chat-nav 可能不适配 dsh <版本> 版本，请慎重使用`，插件仍可加载使用；
 - 维护者可自行调整 `src/index.ts` 的 `DSCH_COMPAT_POLICY`（支持 > / < / = 与通配、数组）。

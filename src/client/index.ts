@@ -37,6 +37,7 @@ import { NavSettingsController } from './settings.ts'
 import type { NavInjected, ObservableFace } from './components/shared/types.ts'
 import { en, zh } from './locales.ts'
 import { goTo, REVEAL_GAP, type JumpFailureCode, type JumpPorts, type JumpSnapshot } from './jump.ts'
+import { getActiveSession, SessionBridge } from './session-bridge.tsx'
 
 /** Locale namespace this plugin owns. */
 const NS = 'mega-chat-nav'
@@ -59,6 +60,8 @@ interface SessionSnapshotLike {
   openState?: string
   hasMore?: boolean
   loadingOlder?: boolean
+  /** 新会话空态（尚无首轮对话）：导航条据此不显示；两版字段同名 */
+  blank?: boolean
   chat?: { nodes?: { values(): Iterable<{ key?: string; anchorSeq?: number; visibility?: string; kind?: string; data?: unknown }> } }
 }
 
@@ -104,10 +107,18 @@ function firstTextBlock(content: readonly { type?: string; text?: string }[] | u
   return block?.text ?? ''
 }
 
-/** 从节点窗口提取提问行（kind 过滤 + 首文本 + 按 anchorSeq 排序） */
+/**
+ * 从节点窗口提取提问行（kind 过滤 + 无回合归属过滤 + 首文本 + 按 anchorSeq 排序）。
+ *
+ * 「无回合归属」= 该行明确落在 turn 0（回合号只会被 turn/start 推进）：这类提问
+ * 之后没有任何回合真正开始（发出即被打断之类），轨道不该为它建节点——口径对齐官方
+ * turnOutline。取不到回合证据时（turnOf 返回 null）**保守保留**，避免新版字段形态
+ * 变化导致整批提问从轨道消失。
+ */
 function extractQuestionRows(nodes: Iterable<ChatRowLike>): { key: string; anchorSeq: number; seq: number; time: number; text: string }[] {
   return [...nodes]
     .filter((node) => QUESTION_KINDS.includes(node.kind ?? ''))
+    .filter((node) => turnOf(node) !== 0)
     .map((node) => {
       const payload = (typeof node.data === 'object' && node.data !== null ? node.data : {}) as RowPayload
       return {
@@ -564,6 +575,15 @@ function createInject(ctx: ClientContext, settings: NavSettingsController): NavI
       return () => { for (const off of subs) off() }
     },
     questionProjection: (sessionId) => navProjectionOf(ctx, sessionId),
+    activeSession: { read: getActiveSession },
+    // 新会话空态判定：读会话快照的 blank（rc.2 与 alpha.2 字段同名）。
+    // 取代旧的列表快照 summary.blank——官方已把视图选择移出列表状态。
+    // 快照缺席（会话未打开 / 未就绪）按「非空」处理：此时桥接尚未上报，
+    // 导航条本就不可见，不应把它误判成空态
+    readBlank: (sessionId) => sessionsOf(ctx).binding(sessionId)?.session.getSnapshot()?.blank === true,
+    // blank 的订阅：会话快照变化即回调。新会话发出首轮后必须由它把导航条唤出——
+    // 只在渲染时读一次会漏掉这次变化（表现为「新会话不显示，重进会话才出现」）
+    subscribeBlank: (sessionId, cb) => sessionsOf(ctx).binding(sessionId)?.session.subscribe(cb) ?? (() => {}),
     // 已加载回合：判定规则见 loadedTurnsOf（该回合的提问行是否在当前窗口可见）
 
     navLoadedTurns: (sessionId) => {
@@ -648,6 +668,18 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({ injected }),
   }, RailDispatch))
+
+  // 会话作用域桥接：把「当前会话」接到根作用域的浮层导航条。
+  // 0.1.6-alpha.2 起 SessionListState 不再带 current（官方把视图选择移出会话服务），
+  // 根作用域无法再自行判定活动会话；这里按官方 TurnNavigator 的思路——在会话作用域
+  // 挂一个无渲染条目上报 sessionId。conversation.input.overlay 是 list + session 作用域，
+  // 三版（0.1.5-rc.2 / 0.1.6-alpha.1 / alpha.2）都存在且都被渲染，返回 null 不占位。
+  ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
+    name: 'conversation.input.overlay',
+    id: 'mega-chat-nav:session-bridge',
+    order: 900,
+    inject: () => ({ activeSession: { read: getActiveSession } }),
+  }, SessionBridge))
 
   // mega-settings 成员契约：元信息 seat + 页面 seat（宿主缺席 → 静默等待 → 自足）
   ctx.slots.inject('mega.settings.member', () => ctx.slots.register({

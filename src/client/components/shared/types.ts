@@ -34,6 +34,12 @@ export interface NavInjected {
   navLoadedTurns: (sessionId: string) => ReadonlySet<number>
   /** 订阅已加载回合集合变化（chat 窗口加载扩展时刷新） */
   subscribeNavLoadedTurns: (sessionId: string, cb: () => void) => () => void
+  /** 当前会话读取面：读会话作用域桥接上报的 id（官方已移除列表快照的 current） */
+  activeSession: { read(): string | undefined }
+  /** 新会话空态判定（会话快照 blank；快照缺席按非空处理） */
+  readBlank: (sessionId: string) => boolean
+  /** 订阅空态变化（新会话发出首轮 / 会话重开时重新判定可见性） */
+  subscribeBlank: (sessionId: string, cb: () => void) => () => void
   /** seq：目标轮序号（方向判定）；currentSeq：当前阅读位置序号（可选，下方判定优先用） */
   jump: (sessionId: string, key: string, seq?: number, currentSeq?: number) => void
   style: () => NavStyle
@@ -82,21 +88,11 @@ export interface FocusState {
   right?: number
 }
 
-/** 会话列表最小面（useSessions selector） */
-export interface SessionListLike {
-  current?: unknown
-  byId?: Record<string, { blank?: boolean }>
-}
-
 /** 翻译函数面 */
 export type Translate = (key: string, vars?: Record<string, string | number>) => string
-
-/** 会话选择器面（useSessions 最小面，宿主按风格组件注入） */
-export type SessionSelector = <S>(selector: (s: SessionListLike) => S) => S
 
 /** 风格组件统一 props 面（各风格自治实现，但入参一致） */
 export interface RailProps {
   injected: NavInjected | undefined
-  useSessions?: SessionSelector
   t: Translate
 }

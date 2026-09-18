@@ -108,7 +108,9 @@ export const msgNavProjectionDefinition: Omit<ProjectionDefinition<'msgNavMessag
   wire: NonNullable<ProjectionDefinition<'msgNavMessages', QuestionIndexState>['wire']>
 } = {
   key: 'msgNavMessages',
-  stateVersion: 2,
+  // 3：无回合归属的 user 消息不再收录（口径对齐官方 turnOutline——节点只由 turn/start 建立）；
+  // 升版本使旧缓存行按新规则重新折叠，避免升级后旧条目继续挂在 turn 0 上
+  stateVersion: 3,
   stateSchema: msgNavMessagesStateSchema,
   init: () => ({ turn: 0, questions: [], metrics: {} }),
   apply: (state: QuestionIndexState, event) => {
@@ -124,6 +126,11 @@ export const msgNavProjectionDefinition: Omit<ProjectionDefinition<'msgNavMessag
       case 'user/message': {
         if (event.surfaceOp !== 'append') return state
         if (event.data.source?.kind !== 'user') return state
+        // 无回合归属的提问不收录：turn 只在 turn/start 时前进，仍为 0 说明这条消息
+        // 之后没有任何回合真正开始（发出即被打断之类）。官方 turnOutline 同样只在
+        // turn/start 建立节点，用户消息仅用于填充该回合预览——不对齐就会出现
+        // 「轨道上多一个没有回合的伪节点，且它的回复让 current 定位失准」
+        if (state.turn === 0) return state
         const entry: NavItem = {
           turn: state.turn,
           id: String(event.data.id),

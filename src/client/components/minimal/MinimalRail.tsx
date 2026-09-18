@@ -13,16 +13,15 @@ import { MobileDrawer } from '../rail/MobileDrawer.tsx'
 import { STYLE_CAPABILITIES, BAND_HEIGHT_PX } from '../../settings.ts'
 
 
-import type { NavInjected, SessionListLike, Translate } from '../shared/types.ts'
+import type { NavInjected, Translate } from '../shared/types.ts'
 
 export interface MinimalRailProps {
   injected: NavInjected | undefined
-  useSessions?: <S>(selector: (s: SessionListLike) => S) => S
   t: Translate
 }
 
 export function MinimalRail(props: MinimalRailProps): ReactNode {
-  const { injected, useSessions, t } = props
+  const { injected, t } = props
   const panelRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [favFilter, setFavFilter] = useState(false)
@@ -37,7 +36,7 @@ export function MinimalRail(props: MinimalRailProps): ReactNode {
   const mobile = useMobileMode()
 
   // 数据与设置
-  const { sessionId, visible, markers } = useMarkerData(injected, useSessions)
+  const { sessionId, visible, markers } = useMarkerData(injected)
   const { favorites, toggle: toggleFavorite } = useFavorites(sessionId)
   const settings = useNavSettings(injected)
   const { style, align, bandHeight, cardCount, cardItems, showPaging } = settings

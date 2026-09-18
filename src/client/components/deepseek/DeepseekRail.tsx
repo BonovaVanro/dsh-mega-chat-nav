@@ -118,7 +118,7 @@ function useFollowCurrent(
 }
 
 export function DeepseekRail(props: RailProps): ReactNode {
-  const { injected, useSessions, t } = props
+  const { injected, t } = props
   const panelRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -148,7 +148,7 @@ export function DeepseekRail(props: RailProps): ReactNode {
 
   const mobile = useMobileMode()
 
-  const { sessionId, visible, markers } = useMarkerData(injected, useSessions)
+  const { sessionId, visible, markers } = useMarkerData(injected)
   const { favorites, toggle: toggleFavorite } = useFavorites(sessionId)
   const settings = useNavSettings(injected)
   const { align, bandHeight } = settings

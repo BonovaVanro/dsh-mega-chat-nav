@@ -107,24 +107,24 @@ On screens narrower than 1024px, the nav strip is lightened to a search-only aff
 
 ## Installation
 
-**Adapted for dsh v0.1.5-rc.\*** (locked to the 0.1.5 rc line). Available via npm / GitHub tag / local package.
+**Adapted for the dsh v0.1.5-rc line** (locked to the 0.1.5 rc prereleases). Available via npm / GitHub tag / local package.
 
 **npm**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2-update.1
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2-update.2
 ```
 
 **GitHub tag**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2-update.1
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2-update.2
 ```
 
 **Local package**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2-update.1.tgz
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2-update.2.tgz
 ```
 
 Uninstall:
@@ -146,7 +146,8 @@ dsh plugin --profile web remove dsh-mega-chat-nav
 
 ## Supported dsh versions & compatibility
 
-- **Adapted for dsh v0.1.5-rc.\* (the 0.1.5 rc line: rc.1 / rc.2 …, excluding the alpha line and the final release; the 0.1.2 line lives on the 0.1.2 branch, the 0.1.1 maintenance line on the 0.1.1 branch)**;
+- **Adapted for dsh v0.1.5-rc (the `0.1.5-rc.*` rc line: rc.1 / rc.2 …)**;
+- Other version lines are outside the compatibility promise; the 0.1.2 and 0.1.1 lines live on their same-named branches;
 - The host checks the version policy on startup (default `= 0.1.5-rc.*`); other versions print
   `dsh-mega-chat-nav may not be compatible with dsh <version>, use with caution` in the console, but the plugin still loads;
 - Maintainers can adjust `DSCH_COMPAT_POLICY` in `src/index.ts` (supports > / < / =, wildcards and arrays).

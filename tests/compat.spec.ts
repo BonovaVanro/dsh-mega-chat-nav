@@ -144,6 +144,21 @@ describe('compat: checkDshPolicy + 提示文案', () => {
     expect(checkDshPolicy('0.1.2', { op: '=', target: '0.1.2-rc.1' })).toBe(false) // 正式版≠rc.1
   })
 
+  it('本分支策略：只承诺 0.1.5-rc 线，其余版本线一律拒绝', () => {
+    const policy = { op: '=' as const, target: '0.1.5-rc.*' }
+    // 保留的 0.1.5-rc 线（本分支改动对其为纯增量）
+    expect(checkDshPolicy('0.1.5-rc.1', policy)).toBe(true)
+    expect(checkDshPolicy('0.1.5-rc.2', policy)).toBe(true)
+    expect(checkDshPolicy('0.1.5-rc.2-update.1', policy)).toBe(true)
+    // 其他线一律拒绝：预发布（alpha / beta / rc）、正式版、相邻线
+    expect(checkDshPolicy('0.1.7-alpha.1', policy)).toBe(false)
+    expect(checkDshPolicy('0.1.7-beta.1', policy)).toBe(false)
+    expect(checkDshPolicy('0.1.7-rc.1', policy)).toBe(false)
+    expect(checkDshPolicy('0.1.5-alpha.1', policy)).toBe(false)
+    expect(checkDshPolicy('0.1.5', policy)).toBe(false)
+    expect(checkDshPolicy('0.1.7', policy)).toBe(false)
+  })
+
   it('提示文案含插件名与当前 dsh 版本', () => {
     expect(dshCompatMessage('dsh-mega-chat-nav', '0.1.1-rc.2')).toBe(
       'dsh-mega-chat-nav 可能不适配 dsh 0.1.1-rc.2 版本，请慎重使用',

@@ -67,7 +67,7 @@ function useFollowCurrent(
 }
 
 export function HarnessRail(props: RailProps): ReactNode {
-  const { injected, useSessions, t } = props
+  const { injected, t } = props
   const panelRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [favFilter, setFavFilter] = useState(false)
@@ -77,7 +77,7 @@ export function HarnessRail(props: RailProps): ReactNode {
   const lastHoverKey = useRef<string | null>(null)
 
   const mobile = useMobileMode()
-  const { sessionId, visible, markers } = useMarkerData(injected, useSessions)
+  const { sessionId, visible, markers } = useMarkerData(injected)
   const { favorites, toggle: toggleFavorite } = useFavorites(sessionId)
   const settings = useNavSettings(injected)
   const { style, align, bandHeight, cardCount, cardItems, markTone, showPaging } = settings
