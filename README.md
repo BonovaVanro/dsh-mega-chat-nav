@@ -108,25 +108,43 @@ DSH（DeepSeek Harness）的**会话提问导航条**：在会话一侧显示整
 
 ## 安装
 
-**已适配 dsh v0.1.5-rc 线**（锁定 0.1.5 rc 预发布）。提供 npm / GitHub tag / 本地包三种安装方式。
+**按 dsh 版本线选择**——两条线的包**互不兼容**（0.1.7 重构了插件的设置/配置模型），请勿混装：
 
-**npm**
+| 你的 dsh | 用哪个 | 说明 |
+|---|---|---|
+| **0.1.7-rc 线** | 本分支（`0.1.7-rc.2`） | 当前开发线，适配 0.1.7-rc.2 |
+| 0.1.5-rc 线 | `latest`（`0.1.5-rc.2-update.2`） | 稳定线，由 `main` / `0.1.5` 分支维护 |
+
+**npm**（0.1.7-rc 线）
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2-update.2
+dsh plugin --profile web add dsh-mega-chat-nav@next
 ```
 
-**GitHub tag**
+**GitHub tag**（0.1.7-rc 线）
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2-update.2
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#next
+# 或锁定具体版本
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.7-rc.2
 ```
 
 **本地包**
 
 ```
+dsh plugin --profile web add dsh-mega-chat-nav-0.1.7-rc.2.tgz
+```
+
+<details>
+<summary>0.1.5-rc 线（稳定版）安装命令</summary>
+
+```
+dsh plugin --profile web add dsh-mega-chat-nav@0.1.5-rc.2-update.2
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.5-rc.2-update.2
 dsh plugin --profile web add dsh-mega-chat-nav-0.1.5-rc.2-update.2.tgz
 ```
+
+</details>
 
 卸载：
 

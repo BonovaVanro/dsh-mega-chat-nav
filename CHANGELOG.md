@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.1.7-rc.2（适配 dsh v0.1.7-rc.2）
+
+[中文](#cn-v0.1.7-rc.2) | [English](#en-v0.1.7-rc.2)
+
+跟随 dsh **0.1.7-rc.2** 更新依赖线。**契约与行为无变化**——rc.2 未改动本插件依赖的接口，升级后无需重新配置。
+
+<h3 id="cn-v0.1.7-rc.2">本次更新</h3>
+
+- **依赖线**：官方全链升至 `0.1.7-rc.2`；兼容声明仍为 **0.1.7-rc.***（rc.2 自动在列，不会再提示不适配）。
+- **移除一个无用依赖**：`@deepseek-ai/dsh-home-paths` 此前被声明为 peer，但代码从不使用（我们直接读 `DSH_HOME`）。留着它反而让安装在新版上因 peer 冲突失败，故删除。
+- **校验方式**（0.1.7 那次的教训）：接口层面 `tsc` 与 172 例测试全绿并不够，故另在 rc.2 上核对了**运行时契约**——导航条钉位依赖的布局（`main.conversation` + `data-phase`）与回合标记（`data-chat-turn` / `data-chat-anchor-key`，位于 `dsh-client-ui-chat`）都仍在，原生回合导航轨的 `turnAtLine` / `turnOutline` 也在。
+
+<h3 id="cn-v0.1.7-rc.2">安装与兼容</h3>
+
+- 0.1.7-rc 线的包与 0.1.5-rc 线**互不兼容**，请按 dsh 版本线选择（详见 README 的安装章节）：
+
+```
+dsh plugin --profile web add dsh-mega-chat-nav@next        # 0.1.7-rc 线（本版）
+dsh plugin --profile web add dsh-mega-chat-nav@latest      # 0.1.5-rc 线（稳定）
+```
+
+- 本次为**跟踪上游的常规更新**，0.1.5-rc 线不受影响。
+
+This release follows dsh **0.1.7-rc.2** and moves the dependency line up. **No contract or behaviour changes** — rc.2 left every interface this plugin uses untouched, so nothing needs reconfiguring after the upgrade.
+
+<h3 id="en-v0.1.7-rc.2">What changed</h3>
+
+- **Dependency line**: the whole official chain moves to `0.1.7-rc.2`; compatibility is still declared for **0.1.7-rc.*** (rc.2 is inside it, so the notice no longer appears).
+- **One useless dependency dropped**: `@deepseek-ai/dsh-home-paths` was declared as a peer but never used by any code (we read `DSH_HOME` directly). Keeping it only made installs fail on the new release with a peer conflict.
+- **How it was verified** (the lesson from 0.1.7): a green `tsc` plus 172 tests is not enough, so the **runtime contracts** were re-checked on rc.2 — the layout the rail pins to (`main.conversation` + `data-phase`) and the turn markers (`data-chat-turn` / `data-chat-anchor-key`, in `dsh-client-ui-chat`) are all still there, as are the native rail's `turnAtLine` / `turnOutline`.
+
+<h3 id="en-v0.1.7-rc.2">Install and compatibility</h3>
+
+- The 0.1.7-rc package and the 0.1.5-rc package are **mutually incompatible**; pick by your dsh version line (see the README's installation section):
+
+```
+dsh plugin --profile web add dsh-mega-chat-nav@next        # 0.1.7-rc line (this release)
+dsh plugin --profile web add dsh-mega-chat-nav@latest      # 0.1.5-rc line (stable)
+```
+
+- This is a **routine upstream-tracking update**; the 0.1.5-rc line is unaffected.
 ## 0.1.7-rc.1（适配 dsh v0.1.7-rc.1）
 
 [中文](#cn-v0.1.7-rc.1) | [English](#en-v0.1.7-rc.1)
