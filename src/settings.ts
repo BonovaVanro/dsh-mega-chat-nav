@@ -7,7 +7,6 @@
  */
 
 import z from '@deepseek-ai/schemastery'
-import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 
 import {
   ALIGN_OPTIONS,
@@ -95,6 +94,18 @@ export interface NavStyleSettings {
 export interface NavSettings {
   general: NavGeneralSettings
   styles: NavStyleSettings
+  /**
+   * mega 家族契约：是否执行 dsh 版本兼容校验。
+   *
+   * 为什么放在**顶层**而不是 general 里：mega 家族的约定读取入口就是
+   * `config.compatCheck`（各成员插件自行读取，与 mega-settings 的全局开关同名同义），
+   * 放在这里既符合契约，也不与 general 的界面选项混在一起。
+   *
+   * **可选**：未设置（undefined）表示"跟随家族公共配置 `$DSH_HOME/mega.json`"，
+   * 显式 true/false 才是用户自己的决定。故 schema 上**不设 default**——
+   * 有 default 时"未设置"会被填成 true，家族公共开关将永远失效。
+   */
+  compatCheck?: boolean
 }
 
 // 显示模式兼容旧布尔（true → show / false → hide）：旧 user 段里的布尔值
@@ -134,8 +145,16 @@ const styleSchemaFields = (style: NavStyle) => ({
   showPaging: z.union([...SHOW_OPTIONS]).default(StyleDefaults[style].showPaging),
 })
 
-/** 持久化设置 schema；也是浏览器 scope 校验的 wire 信封 */
-export const NavSettingsSchema: z<NavSettings> = z.object({
+/**
+ * 插件配置 schema（0.1.7 起）：settings 命名空间与配置表单由插件导出的 `Config` 派生，
+ * 不再经 `ctx.settings.register` 注册（该 API 在 0.1.7 已移除）。
+ *
+ * `.volatile()` 是**实时写入的前提**：0.1.7 只允许 volatile 字段被客户端即时写入，
+ * 非 volatile 路径写会被宿主拒绝（`Config field "x" is not volatile`）。本插件每个
+ * 选项都要即时生效（风格/对齐/条带高度…），因此整个对象标为 volatile——与
+ * mega-settings 的做法一致，需 schemastery >= 3.18.3。
+ */
+const NavSettingsSchemaRaw = z.object({
   general: GeneralSchema,
   styles: z.object({
     minimal: z.object({ ...StyleFields, ...styleSchemaFields('minimal') }),
@@ -143,7 +162,22 @@ export const NavSettingsSchema: z<NavSettings> = z.object({
     deepseek: z.object({ ...StyleFields, ...styleSchemaFields('deepseek') }),
     harness: z.object({ ...StyleFields, ...styleSchemaFields('harness') }),
   }),
-})
+  /* mega 家族契约：兼容性校验开关（与 mega-settings 的全局开关同名同义）。
+     **不设 default**：必须能区分"用户没设"与"用户设了 true"——
+     前者要跟随家族公共配置 $DSH_HOME/mega.json，后者才是显式压制。
+     整对象已标 .volatile()，其下每个叶子都可实时写入——**不要**在此再标 volatile：
+     官方客户端 schema 校验拒绝「volatile 套 volatile」。 */
+  compatCheck: z.boolean(),
+}).volatile()
 
-/** 本插件设置命名空间 */
-export const megaChatNavSettingsNamespace = 'mega-chat-nav' as SettingsNamespace
+/**
+ * 导出为自身接口类型（可移植声明）：0.1.7 的 schemastery schema 类型引用 cosmokit 私有
+ * 路径，直接导出推断类型会触发 TS2742（cannot be named）；运行时 schema 不变。
+ */
+export const NavSettingsSchema: z<NavSettings> = NavSettingsSchemaRaw as unknown as z<NavSettings>
+
+/**
+ * 0.1.7 起命名空间 = **profile entry id**（cordis.patch.yml 里的 entry id）。
+ * 定义在 shared/domain.ts（客户端也要用，且不得经本模块——本模块含 schemastery）。
+ */
+export { MEGA_CHAT_NAV_ENTRY_ID } from './shared/domain.ts'

@@ -1,35 +1,40 @@
 /**
  * Host half of the dsh-mega-chat-nav plugin — runs in the DSH host process.
- * Registers the `msgNavMessages` session projection unit (the ordered list
- * of user questions, each tagged with its turn) and the plugin's durable
- * settings namespace. Both registries are optional capabilities, so each
- * registration rides `ctx.inject`: without them the host half contributes
- * nothing and the browser strip falls back to live-window questions and
- * default rail alignment.
+ *
+ * 0.1.7 起插件配置的声明方式改为**导出 `Config` schema**：设置命名空间与配置表单由它
+ * 自动派生，`ctx.settings.register` 已被官方移除。自身配置经 `apply(ctx, config)`
+ * 的**第二参**注入（不是 `ctx.config`——那是 cordis 守卫属性，声明进 inject 会被当成
+ * 待就绪的 service 而永久 pending）。
+ *
+ * 另一项注册（`msgNavMessages` 会话投影）仍是可选能力，走 `ctx.inject`：缺席时宿主
+ * 半不贡献投放，浏览器侧回退到「活动窗口内提问」与默认对齐。
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import { parse as parseYamlDocument } from 'yaml'
 import type { Context } from '@deepseek-ai/cordis'
 import { msgNavProjectionDefinition } from './projection.ts'
 import { registerSearchRoute } from './search.ts'
-import { megaChatNavSettingsNamespace, NavSettingsSchema } from './settings.ts'
+import { NavSettingsSchema, type NavSettings } from './settings.ts'
 import { checkDshPolicy, dshCompatMessage, type DshCompatPolicy } from './compat.ts'
+
+/** 插件 Config schema（0.1.7 起由加载器据此派生设置命名空间 / 表单 / 校验）。 */
+export const Config = NavSettingsSchema
+
+/** 本插件的自身配置形态（= 上述 schema 的解析结果）。 */
+export type PluginConfig = NavSettings
 
 /** Cordis plugin name. */
 export const name = 'dsh-mega-chat-nav'
 
 /**
- * 兼容策略：0.1.5-rc 线（'= 0.1.5-rc.*'）。
- * - 布局契约：conversation 仍为 main 槽的 keyed 条目
- *   （DOM 为 [data-slot="main.conversation"]），导航条钉位依赖此契约；
- * - 0.1.5-rc 线是本分支对外承诺的唯一目标线；本分支的改动对它是纯增量，
- *   线上用户不必被迫升级；
- * - 其余版本线（含尚未发布的预发布线）不作兼容声明；适配事实见 CHANGELOG；
- * - 0.1.2 / 0.1.1 线分别由 0.1.2 / 0.1.1 分支负责。
+ * 兼容策略：0.1.7-rc 线（'= 0.1.7-rc.*'）。
+ * - 0.1.7 的设置/配置模型是**破坏性变更**（`ctx.settings.register` 被移除），
+ *   同一个包不可能同时兼容 0.1.5-rc 线，故本分支只服务 0.1.7；
+ * - 维护旧线请用对应分支（0.1.5-rc.2 见 main，0.1.2 / 0.1.1 各有分支）；
+ * - 0.1.7-alpha 统一不声明兼容（alpha 线仍会打印「可能不适配」提示，属设计）。
  */
-const DSCH_COMPAT_POLICY: DshCompatPolicy = { op: '=', target: '0.1.5-rc.*' }
+const DSCH_COMPAT_POLICY: DshCompatPolicy = { op: '=', target: '0.1.7-rc.*' }
 
 const dshRequire = createRequire(import.meta.url)
 
@@ -48,49 +53,39 @@ function detectDshVersion(): string | null {
   return null
 }
 
-/** mega-settings 的 namespace 与其「兼容性校验」开关字段（mega 家族契约）。 */
-export const MEGA_SETTINGS_NS = 'mega-settings'
+/** mega 家族契约的「兼容性校验」开关字段（与 mega-settings 的全局开关同名同义）。 */
 const COMPAT_CHECK_FIELD = 'compatCheck'
 
-/** 读取 mega-settings 配置的最小面（仅为结构型约束，避免硬依赖其类型）。 */
-interface SettingsReaderLike {
-  get(ns: string): unknown
-}
-
 /**
- * 解析设置文档所在位置：`$DSH_HOME/settings.yaml`，无该环境变量时 `~/.dsh/settings.yaml`。
+ * mega 家族**公共配置文件**：`$DSH_HOME/mega.json`（无 DSH_HOME 时 `~/.dsh/mega.json`）。
  *
- * 与官方文件 provider 同源：它按 `resolveDshHome()` + `settings.yaml` 定位，并 watch
- * 该文档、把外部编辑热发布——所以「用户直接编辑 YAML 关闭校验」本就是受支持的用法，
- * 我们读同一个文档才不会与其读写脱节。
+ * 为什么需要它：0.1.7 的配置按 profile 条目分开承载，用户想「一处关闭、全体 mega 插件
+ * 静音」时没有任何公共落点（未装 mega-settings 时更是完全没有设置界面）。
+ * 该文件是**家族约定**：每个成员插件在自身配置未显式设置 compatCheck 时读它。
  *
- * @returns 设置文档的绝对路径
+ * 与官方 `resolveDshHome` 同源解析，避免两处指向不同目录。
  */
-export function settingsDocumentPath(): string {
+export function megaFamilyConfigPath(): string {
   const home = process.env.DSH_HOME?.trim()
-  const base = home !== undefined && home.length > 0 ? home : join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh')
-  return join(base, 'settings.yaml')
+  const base = home !== undefined && home.length > 0
+    ? home
+    : join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh')
+  return join(base, 'mega.json')
 }
 
 /**
- * 从设置文档里读 `compatCheck`（**文件兜底通道**）。
+ * 读家族公共配置里的 `compatCheck`。
  *
- * 为什么需要它：宿主 settings 服务的 `get(ns)` 只认**已注册**的 namespace
- * （实现为 `registrations.get(ns)?.resolved`）。未安装 mega-settings 时该 namespace
- * 无人注册，服务侧读不到——可用户仍可能手写配置要求跳过校验。文档由官方 provider
- * 持有（含外部编辑热发布），因此这一层直接读文档即可，且与服务通道同源。
- *
- * @param path - 设置文档路径；省略时按 {@link settingsDocumentPath} 解析
- * @returns 文档中显式写下的布尔值；缺失/无法解析/任何异常一律 undefined（交回缺省）
+ * @param path - 配置文件路径（测试注入用）；省略时按 {@link megaFamilyConfigPath}
+ * @returns 显式写下的布尔值；文件缺失 / JSON 损坏 / 字段非布尔 一律 undefined（交回缺省）
  */
-export function readCompatCheckFromFile(path?: string): boolean | undefined {
+export function readFamilyCompatCheck(path?: string): boolean | undefined {
   try {
-    const file = path ?? settingsDocumentPath()
+    const file = path ?? megaFamilyConfigPath()
     if (!existsSync(file)) return undefined
-    const doc = parseYamlDocument(readFileSync(file, 'utf8')) as Record<string, unknown> | null
-    const section = doc?.[MEGA_SETTINGS_NS]
-    if (typeof section !== 'object' || section === null) return undefined
-    const value = (section as Record<string, unknown>)[COMPAT_CHECK_FIELD]
+    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+    const value = (parsed as Record<string, unknown>)[COMPAT_CHECK_FIELD]
     return typeof value === 'boolean' ? value : undefined
   } catch {
     return undefined
@@ -98,52 +93,82 @@ export function readCompatCheckFromFile(path?: string): boolean | undefined {
 }
 
 /**
- * mega 家族契约：是否执行 dsh 版本兼容校验。
+ * 解包 schemastery 的 `Volatile` 引用。
  *
- * mega-settings 提供全局开关 `compatCheck`（缺省 true），约定**各 mega 插件自行读取**，
- * 关闭后插件启动时跳过版本校验与提醒。两条通道按序尝试：
+ * 为什么需要：`Config` 上标了 `.volatile()` 的字段在 `apply` 里拿到的是**引用包装**
+ * 而非普通值（整对象标 volatile 时，连 `config` 本身都是包装）——必须 `.get()` 才能
+ * 读到真实数据。
  *
- * 1. **服务通道**：`settings.get('mega-settings')`——mega-settings 已加载时生效；
- * 2. **文件通道**：直接读设置文档——mega-settings 缺席时仍尊重用户手写的配置。
+ * 判定方式：**鸭子类型**（对象且带 `get` 函数）。官方的 `isVolatile` 用的是
+ * `Symbol(cosmokit.volatile.write)` 这个**符号键**（`Reflect.ownKeys` 可见），
+ * 按字符串 `'write'` 判定会永远失败——那正是本函数最初写错的地方。
  *
- * 两条都读不到时按**缺省 true**：宁可多提醒，也不因读不到配置而漏掉不兼容警示。
- *
- * @param settings - 宿主 settings 服务；缺席时跳过服务通道
- * @param path - 设置文档路径（测试注入用）；省略时按环境解析
- * @returns true = 照常校验并提醒；false = 用户已关闭，跳过
+ * @param value - 可能是引用包装的配置值
+ * @returns 解包后的普通对象；拿不到对象时返回 undefined
  */
-export function compatCheckEnabled(settings: SettingsReaderLike | undefined, path?: string): boolean {
-  if (settings !== undefined) {
-    try {
-      const config = settings.get(MEGA_SETTINGS_NS) as Record<string, unknown> | undefined
-      const value = config?.[COMPAT_CHECK_FIELD]
-      if (typeof value === 'boolean') return value
-    } catch {
-      /* 服务通道不可用：转文件通道 */
-    }
+function unwrapVolatile(value: unknown): Record<string, unknown> | undefined {
+  let current: unknown = value
+  // 理论上只有一层包装，循环上限防御异常构造
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof current !== 'object' || current === null) break
+    const get = (current as { get?: unknown }).get
+    if (typeof get !== 'function') break
+    current = (get as () => unknown).call(current)
   }
-  return readCompatCheckFromFile(path) ?? true
+  return typeof current === 'object' && current !== null ? (current as Record<string, unknown>) : undefined
 }
 
-export function apply(ctx: Context): void {
+/**
+ * mega 家族契约：是否执行 dsh 版本兼容校验。
+ *
+ * mega 家族契约开关 `compatCheck`（缺省 true），约定**各 mega 插件自行读取**，
+ * 关闭后插件启动时跳过版本校验与提醒。按优先级取第一个布尔值：
+ *
+ * 1. **自身配置**：`apply(ctx, config)` 的第二参——用户在 profile patch 里给本插件条目
+ *    写的 `config.compatCheck`（0.1.7 的配置承载位置）；
+ * 2. **家族公共配置**：`$DSH_HOME/mega.json` 的 `compatCheck`——**一处关闭、全体静音**
+ *    （见 {@link readFamilyCompatCheck}）；这一层让「未装 mega-settings 时也能统一关闭」
+ *    成立——那正是它存在的理由；
+ * 3. 都读不到 → **缺省 true**：宁可多提醒，也不因读不到配置而漏掉不兼容警示。
+ *
+ * 两条旧通道在 0.1.7 均已不成立，故不再保留：
+ * - `settings.yaml` 文件通道——该文档不再是配置中心（0.1.5-rc 线）；
+ * - `settings.get('mega-settings')` 跨插件服务通道——0.1.7 的契约是各读自己的配置，
+ *   且该调用还需本插件声明 `'settings'` 注入与 `dsh-settings` 类型增强，纯属历史包袱。
+ *
+ * @param config - 本插件自身配置（apply 第二参）
+ * @param familyPath - 家族公共配置文件路径（测试注入用）
+ * @returns true = 照常校验并提醒；false = 用户已关闭，跳过
+ */
+export function compatCheckEnabled(config?: unknown, familyPath?: string): boolean {
+  const unwrapped = unwrapVolatile(config)
+  const own = unwrapped?.[COMPAT_CHECK_FIELD]
+  if (typeof own === 'boolean') return own
+  return readFamilyCompatCheck(familyPath) ?? true
+}
+
+/**
+ * 插件入口。
+ *
+ * @param ctx - 宿主插件上下文
+ * @param config - 本插件自身配置（0.1.7：由导出的 `Config` schema 解析后经第二参注入）
+ */
+export function apply(ctx: Context, config?: PluginConfig): void {
   ctx.inject(['sessionProjections'], (inner) => {
     inner.sessionProjections.register(msgNavProjectionDefinition)
   })
-  ctx.inject(['settings'], (settingsCtx) => {
-    settingsCtx.settings.register(megaChatNavSettingsNamespace, NavSettingsSchema)
-    // dsh 版本兼容校验：检测失败或不合规只打印警示，不阻断插件加载。
-    // 读 mega-settings 的 compatCheck 开关决定是否执行（mega 家族契约）。
-    try {
-      if (compatCheckEnabled(settingsCtx.settings as unknown as SettingsReaderLike)) {
-        const dshVer = detectDshVersion()
-        if (dshVer !== null && !checkDshPolicy(dshVer, DSCH_COMPAT_POLICY)) {
-          console.warn(dshCompatMessage(name, dshVer))
-        }
+  // dsh 版本兼容校验：检测失败或不合规只打印警示，不阻断插件加载。
+  // 开关读自身 config.compatCheck（0.1.7 的承载位置）。
+  try {
+    if (compatCheckEnabled(config)) {
+      const dshVer = detectDshVersion()
+      if (dshVer !== null && !checkDshPolicy(dshVer, DSCH_COMPAT_POLICY)) {
+        console.warn(dshCompatMessage(name, dshVer))
       }
-    } catch {
-      /* 校验器自身异常不应影响插件 */
     }
-  })
+  } catch {
+    /* 校验器自身异常不应影响插件 */
+  }
   try {
     registerSearchRoute(ctx)
   } catch (e) {

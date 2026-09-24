@@ -24,16 +24,18 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the settings shell's SlotMap merge ('settings.plugins.tab')
-// and the ctx.settingsScope Context merge.
+// and the ctx.configForms Context merge（0.1.7 起取代 ctx.settingsScope）。
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { SettingsScopeBinder } from '@deepseek-ai/dsh-client-ui-settings/client'
+
+// 注意：必须从 shared 取值——宿主 settings 模块含 schemastery（浏览器模块表里没有该包）
+import { MEGA_CHAT_NAV_ENTRY_ID } from '../shared/domain.ts'
 
 /** 0.1.2 线 client 上下文 = cordis Context（runtime 拆分后不再有 ClientContext 别名）。 */
 type ClientContext = Context
 import { RailDispatch } from './components/RailDispatch.tsx'
 import { SettingsPage } from './components/settings/SettingsPage.tsx'
 import { StandaloneSettings } from './components/settings/StandaloneSettings.tsx'
-import { NavSettingsController } from './settings.ts'
+import { NavSettingsController, type NavSettingsSection } from './settings.ts'
 import type { NavInjected, ObservableFace } from './components/shared/types.ts'
 import { en, zh } from './locales.ts'
 import { goTo, REVEAL_GAP, type JumpFailureCode, type JumpPorts, type JumpSnapshot } from './jump.ts'
@@ -732,9 +734,10 @@ export function apply(ctx: ClientContext): void {
     }, 'mega-chat-nav: plugins tab ledger')
   }
 
-  // 设置控制器挂载：settingsScope 服务就绪后绑定 scope（未就绪时配置读写走默认值降级）
-  ctx.inject(['settingsScope'], (scopeCtx) => {
-    settings.attach(scopeCtx.get('settingsScope') as SettingsScopeBinder)
+  // 设置控制器挂载：configForms 服务就绪后取本条目（entry id = ui-mega-chat-nav）的表单。
+  // 未就绪时控制器以默认值降级运行，不影响导航条本体。
+  ctx.inject(['configForms'], (formsCtx) => {
+    settings.attach(formsCtx.configForms.get<NavSettingsSection>(MEGA_CHAT_NAV_ENTRY_ID))
   })
 }
 

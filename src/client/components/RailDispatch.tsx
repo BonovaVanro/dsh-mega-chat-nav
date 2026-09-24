@@ -1,8 +1,8 @@
 // 风格分发：按当前配置的 style 挂载对应风格轨组件（minimal 圆点轨 / codex 刻度轨）。
 // 风格配置各自独立（styles.<style> 段），此处仅做选择——切换风格即卸载/重挂风格轨。
 import { useEffect, useState, type ReactNode } from 'react'
-import type { NavStyle } from '../settings.ts'
-import { DEFAULT_STYLE } from '../settings.ts'
+// 从 shared 取（宿主 settings 模块含 schemastery，客户端 bundle 不得引入）
+import { DEFAULT_STYLE, type NavStyle } from '../../shared/domain.ts'
 import type { NavInjected, Translate } from './shared/types.ts'
 import { MinimalRail } from './minimal/MinimalRail.tsx'
 import { CodexRail } from './codex/CodexRail.tsx'

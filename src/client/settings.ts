@@ -1,20 +1,51 @@
 /**
- * Browser mirror of the `mega-chat-nav` settings namespace: reads the rail
- * settings from the settings scope (`ctx.settingsScope.bind`) and routes the
- * user's choices back through the host bridge (POST /mega-chat-nav/settings).
+ * Browser mirror of the plugin's own configuration section.
+ *
+ * 0.1.7 起读写入口从 `ctx.settingsScope.bind({namespace})` 改为
+ * `ctx.configForms.get<T>(entryId)`：命名空间 = **profile entry id**（`ui-mega-chat-nav`），
+ * 写入用**路径级 `mutate`**（宿主按 path merge，无「整对象读-改-写」竞争），
+ * 且只有 `Config` 里标了 `volatile` 的字段可被实时写入。
  *
  * 配置选项（选项表/默认值/类型）集中在 src/shared/domain.ts，双半共享
  * （纯字面量零依赖，client bundle 不因此引入宿主包）。
  *
- * The settings surface is optional and may apply after this plugin, so the
- * controller starts unbound and degrades to the defaults until {@link attach}
- * binds the scope.
+ * 设置面可能晚于本插件就绪，因此控制器先以默认值运行，待 {@link attach} 拿到表单后接管。
  *
  * @module dsh-mega-chat-nav/client/settings
  */
 
-// 0.1.2 线：SettingsScope 契约从已停发的 dsh-client-runtime 移到 dsh-client-ui-settings
-import type { SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec } from '@deepseek-ai/dsh-client-ui-settings/client'
+/**
+ * 本控制器需要的最小表单面（结构型约束）。
+ *
+ * 刻意不 import `ConfigForm`：`@deepseek-ai/dsh-client-ui-settings/client` 是**宿主包**，
+ * 客户端产物不应把它拉进依赖图（官方客户端 bundle 纯度门同样禁止跨插件值导入）；
+ * 结构型声明还能让测试用假表单直接驱动控制器。
+ */
+export interface ConfigFormSnapshotLike<T> {
+  /** `loading` 直到首次收到 section，`ready` 表示已有一份可用值 */
+  status: 'loading' | 'ready' | 'unavailable'
+  /** schema 解析后的 section；首次接收前为 undefined */
+  value: T | undefined
+  /** 用户层原始内容（字段「出现」即代表被显式覆盖） */
+  user: unknown
+  /** 写入围栏用的命名空间 revision */
+  revision: number | undefined
+  /** 宿主是否接受写入 */
+  writable: boolean
+}
+
+/** 路径级写入操作（对齐 dsh-api-remotes 的 SettingsPathOpView，本地收窄免外部依赖）。 */
+export type SettingsPathOp =
+  | { op: 'set'; path: readonly string[]; value: unknown }
+  | { op: 'unset'; path: readonly string[] }
+
+/** 一个命名空间的表单面（`ctx.configForms.get(entryId)` 的返回值）。 */
+export interface ConfigFormLike<T> {
+  getSnapshot(): ConfigFormSnapshotLike<T>
+  subscribe(listener: () => void): () => void
+  /** 原子提交一组路径操作；true = 宿主接受，false = 被拒或跳过（传输失败则 reject）。 */
+  mutate(ops: readonly SettingsPathOp[], expectedRevision?: number): Promise<boolean>
+}
 
 import {
   ALIGN_OPTIONS,
@@ -78,9 +109,6 @@ export const STYLE_CAPABILITIES: Record<NavStyle, StyleCapabilities> = {
   harness: { hoverCards: true, paging: true },
 }
 
-/** 本插件设置命名空间 */
-export const MGCN_NS = 'mega-chat-nav'
-
 /** 导航栏偏移（px）范围与默认值 */
 export const RAIL_OFFSET_MIN = 0
 export const RAIL_OFFSET_MAX = 32
@@ -138,9 +166,62 @@ function isScrollMode(value: unknown): value is ScrollMode {
   return (SCROLL_OPTIONS as readonly unknown[]).includes(value)
 }
 
-/** The minimal face of the settings scope service this controller needs. */
-export interface SettingsScopeBinderLike {
-  bind<T>(spec: SettingsScopeSpec<T>): SettingsScope<T>
+/**
+ * 乐观写穿缓存键：宿主写入 = 写盘 + 全量 reconcile（实测约 1.5s），
+ * 在这段时间里刷新页面会打断写入而丢配置。把「尚未被宿主确认」的意图写到 localStorage，
+ * 刷新后先按它显示、并自动重提交宿主，宿主确认后再摘下。
+ */
+const OPTIMISTIC_CACHE_KEY = 'dsh-mega-chat-nav.optimistic.v1'
+
+/**
+ * 字段写入防抖窗口（ms）：快速连点只发一次宿主写、携带最终值。
+ * 400 与 mega-settings 取值一致——足够合并人手连点，又不会让正常单击显得迟滞。
+ */
+const SETTINGS_WRITE_DEBOUNCE_MS = 400
+
+/** 未确认写入：字段路径（如 `general.align`、`styles.codex.cardCount`）→ 期望值 */
+type PendingWrites = Record<string, unknown>
+
+function readPendingCache(): PendingWrites {
+  try {
+    const raw = localStorage.getItem(OPTIMISTIC_CACHE_KEY)
+    if (!raw) return {}
+    const parsed: unknown = JSON.parse(raw)
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as PendingWrites)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function writePendingCache(pending: PendingWrites): void {
+  try {
+    if (Object.keys(pending).length === 0) localStorage.removeItem(OPTIMISTIC_CACHE_KEY)
+    else localStorage.setItem(OPTIMISTIC_CACHE_KEY, JSON.stringify(pending))
+  } catch {
+    /* localStorage 不可用时忽略：写穿只是增强，不影响功能 */
+  }
+}
+
+/** 把路径段编码成缓存键（段内不含分隔符，故可用 . 连接） */
+function pathKey(path: readonly string[]): string {
+  return path.join('.')
+}
+
+/** 按路径深读（任一层缺失即 undefined） */
+function readPath(root: unknown, path: readonly string[]): unknown {
+  let current: unknown = root
+  for (const key of path) {
+    if (current === null || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[key]
+  }
+  return current
+}
+
+/** 值相等（对象/数组按 JSON 比较；用于判断宿主是否已确认某次写入） */
+function sameValue(a: unknown, b: unknown): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b)
 }
 
 /** 单风格 wire 段（每风格独立；字段同 host schema） */
@@ -153,7 +234,7 @@ interface StyleWireSection {
 }
 
 /** Wire section this plugin owns (the Host schema's fields). */
-interface NavSettingsSection {
+export interface NavSettingsSection {
   general?: {
     style?: unknown
     align?: unknown
@@ -198,13 +279,40 @@ export interface NavSettingsState {
   cardItems: CardItem[]
   /** 刻度色调（codex 刻度轨；minimal 忽略） */
   markTone: MarkTone
-  /** Whether the user layer overrides the composition default. */
-  overridden: boolean
+  /**
+   * 是否已有用户修改（含尚未被宿主确认的写入）。
+   *
+   * 读取时计算（见 {@link NavSettingsController.getSnapshot}），**不参与快照 diff**：
+   * 它随宿主确认而翻转，放进状态会制造"没有可见变化"的假通知。
+   */
+  overridden?: boolean
 }
 
 /** Reactive handle over the plugin's durable settings section. */
 export class NavSettingsController {
-  private scope: SettingsScope<NavSettingsSection> | undefined
+  private scope: ConfigFormLike<NavSettingsSection> | undefined
+  /**
+   * 尚未被宿主确认的写入（路径 → 期望值）。刷新后从 localStorage 恢复并重放，
+   * 宿主快照追平后逐条摘下——宿主写慢也不丢配置。
+   */
+  private pending: PendingWrites = {}
+  /**
+   * 本会话内发生过用户动作（setter 调用）。
+   *
+   * 为什么需要它：`commit` 在 `writePath` 之前执行（setStyle 依赖 commit 后的风格），
+   * 那一刻 pending 还没记上；若只看 pending/宿主 user 段，刚点的那一下会显示"未修改"。
+   * 宿主确认（pending 清空）时归位。
+   */
+  private touched = false
+  /**
+   * 每个字段路径的「未落定写入」计数：>0 表示该路径还有防抖等待或请求在途的宿主写入。
+   *
+   * 为什么必须有它：宿主每次写入都会回推镜像；若写入未落定就按"宿主值 == 意图"摘下覆盖，
+   * 快速连点期间会先摘后又被中间值顶回，UI 便跟着 true/false 缓慢翻转（mega-settings 实测修复）。
+   */
+  private readonly dirtyGen = new Map<string, number>()
+  /** 每个字段路径的防抖定时器：快速连点合并为一次宿主写入（避免宿主逐个回放整串 T→F→T→F） */
+  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly listeners = new Set<() => void>()
   private unsubscribe: () => void = () => {}
   private state: NavSettingsState = {
@@ -222,19 +330,24 @@ export class NavSettingsController {
     cardCount: DEFAULT_CARD_COUNT[DEFAULT_STYLE],
     cardItems: [...DEFAULT_CARD_ITEMS],
     markTone: DEFAULT_MARK_TONE,
-    overridden: false,
   }
 
   /**
-   * Bind the namespace scope once the settings surface is present.
-   * A no-op after the first bind.
+   * 接管本插件的配置表单（0.1.7：`ctx.configForms.get(entryId)`）。首次 attach 生效，之后为 no-op。
+   *
+   * 传入的是 `ctx.configForms.get<NavSettingsSection>(entryId)` 本身（= {@link ConfigFormLike}）。
    */
-  attach(binder: SettingsScopeBinderLike): void {
+  attach(source: ConfigFormLike<NavSettingsSection>): void {
     if (this.scope !== undefined) return
-    this.scope = binder.bind<NavSettingsSection>({ namespace: MGCN_NS })
+    this.scope = source
+    // 恢复上次未确认的写入（可能被快速刷新打断）：先按它显示，再重提交宿主
+    this.pending = readPendingCache()
+    this.replayPending()
     this.state = this.derive(this.scope.getSnapshot())
     this.unsubscribe = this.scope.subscribe(() => {
       if (this.scope === undefined) return
+      // 宿主快照变了：先摘掉已确认的 pending，再据此推导（否则会一直压着旧意图）
+      this.reconcilePending()
       const next = this.derive(this.scope.getSnapshot())
       if (next.style === this.state.style
         && next.align === this.state.align && next.bandHeight === this.state.bandHeight
@@ -242,94 +355,90 @@ export class NavSettingsController {
         && next.scrollBehavior === this.state.scrollBehavior
         && next.showCount === this.state.showCount
         && next.showSearch === this.state.showSearch
-        && next.showQuickSettings === this.state.showQuickSettings
-        && next.overridden === this.state.overridden) return
+        && next.showQuickSettings === this.state.showQuickSettings) return
       this.state = next
       for (const listener of this.listeners) listener()
     })
   }
 
   /** 当前生效风格的 styles.<style> 段（快照内读取，供逐风格独立取值） */
-  private styleSection(snapshot: SettingsScopeSnapshot<NavSettingsSection>, style: NavStyle): StyleWireSection | undefined {
+  private styleSection(snapshot: ConfigFormSnapshotLike<NavSettingsSection>, style: NavStyle): StyleWireSection | undefined {
     return snapshot.value?.styles?.[style]
   }
 
-  private derive(snapshot: SettingsScopeSnapshot<NavSettingsSection>): NavSettingsState {
-    const user = snapshot.user as NavSettingsSection | undefined
+  private derive(snapshot: ConfigFormSnapshotLike<NavSettingsSection>): NavSettingsState {
     const general = snapshot.value?.general
     const ready = snapshot.status === 'ready'
-    const style = ready && isNavStyle(general?.style) ? general.style : DEFAULT_STYLE
+    // 未确认写入叠加：路径级读值（pending 优先）。宿主写慢时刷新页面，
+    // 快照还没追平，这里让用户看到自己的意图而不是被回退。
+    const pick = (path: readonly string[], hostValue: unknown): unknown => {
+      const key = pathKey(path)
+      return key in this.pending ? this.pending[key] : hostValue
+    }
+    const style = ready && isNavStyle(pick(['general', 'style'], general?.style))
+      ? pick(['general', 'style'], general?.style) as NavStyle
+      : DEFAULT_STYLE
     const active = this.styleSection(snapshot, style)
+    const generalPick = (field: string): unknown => pick(['general', field], (general as Record<string, unknown> | undefined)?.[field])
+    const stylePick = (field: string): unknown => pick(['styles', style, field], (active as Record<string, unknown> | undefined)?.[field])
     return {
       style,
-      align: ready && isRailAlign(general?.align) ? general.align : DEFAULT_ALIGN,
-      bandHeight: ready && isBandHeight(active?.bandHeight) ? active.bandHeight : DEFAULT_BAND,
-      cardCount: ready && isCardCount(active?.cardCount) ? active.cardCount : DEFAULT_CARD_COUNT[style],
-      cardItems: ready && isCardItems(active?.cardItems) ? active.cardItems : [...DEFAULT_CARD_ITEMS],
-      markTone: ready && isMarkTone(active?.markTone) ? active.markTone : DEFAULT_MARK_TONE,
-      scrollBehavior: ready && isScrollMode(general?.scrollBehavior) ? general.scrollBehavior : DEFAULT_SCROLL,
-      showCount: ready ? coerceShowMode(general?.showCount) : DEFAULT_SHOW,
-      showSearch: ready ? coerceShowMode(general?.showSearch) : DEFAULT_SHOW,
-      showQuickSettings: ready ? coerceShowMode(general?.showQuickSettings) : DEFAULT_SHOW,
-      showFavorites: ready ? coerceShowMode(general?.showFavorites) : DEFAULT_SHOW,
-      showPaging: ready ? coercePagingMode(active?.showPaging, DEFAULT_PAGING[style]) : DEFAULT_PAGING[style],
-      searchScopes: ready && isSearchScopes(general?.searchScopes) ? general.searchScopes : [...DEFAULT_SEARCH_SCOPES],
-      railOffset: ready && typeof general?.railOffset === 'number' && general.railOffset >= 0 && general.railOffset <= 32
-        ? Math.round(general.railOffset)
+      align: ready && isRailAlign(generalPick('align')) ? generalPick('align') as RailAlign : DEFAULT_ALIGN,
+      bandHeight: ready && isBandHeight(stylePick('bandHeight')) ? stylePick('bandHeight') as BandHeight : DEFAULT_BAND,
+      cardCount: ready && isCardCount(stylePick('cardCount')) ? stylePick('cardCount') as CardCount : DEFAULT_CARD_COUNT[style],
+      cardItems: ready && isCardItems(stylePick('cardItems')) ? stylePick('cardItems') as CardItem[] : [...DEFAULT_CARD_ITEMS],
+      markTone: ready && isMarkTone(stylePick('markTone')) ? stylePick('markTone') as MarkTone : DEFAULT_MARK_TONE,
+      scrollBehavior: ready && isScrollMode(generalPick('scrollBehavior')) ? generalPick('scrollBehavior') as ScrollMode : DEFAULT_SCROLL,
+      showCount: ready ? coerceShowMode(generalPick('showCount')) : DEFAULT_SHOW,
+      showSearch: ready ? coerceShowMode(generalPick('showSearch')) : DEFAULT_SHOW,
+      showQuickSettings: ready ? coerceShowMode(generalPick('showQuickSettings')) : DEFAULT_SHOW,
+      showFavorites: ready ? coerceShowMode(generalPick('showFavorites')) : DEFAULT_SHOW,
+      showPaging: ready ? coercePagingMode(stylePick('showPaging'), DEFAULT_PAGING[style]) : DEFAULT_PAGING[style],
+      searchScopes: ready && isSearchScopes(generalPick('searchScopes')) ? generalPick('searchScopes') as SearchScope[] : [...DEFAULT_SEARCH_SCOPES],
+      railOffset: ready && typeof generalPick('railOffset') === 'number'
+        && (generalPick('railOffset') as number) >= 0 && (generalPick('railOffset') as number) <= 32
+        ? Math.round(generalPick('railOffset') as number)
         : DEFAULT_RAIL_OFFSET,
-      overridden: user !== undefined && (user.general !== undefined || user.styles !== undefined),
     }
   }
 
   /** Release the scope subscription. */
   dispose(): void {
+    for (const timer of this.timers.values()) clearTimeout(timer)
+    this.timers.clear()
     this.unsubscribe()
     this.listeners.clear()
   }
 
-  /** 乐观提交：更新状态并立即通知（UI 即时反映） */
+  /**
+   * 乐观提交：更新状态并立即通知（UI 即时反映）。
+   *
+   * 这里**重算 overridden**：调用方是从旧状态展开的（`{ ...this.state, align }`），
+   * 照抄会滞后一拍——用户刚改的那一下设置页仍显示"未修改"，要等宿主快照回来才对。
+   * 判定含 pending：本地已改但宿主未确认也算已修改。
+   */
   private commit(next: NavSettingsState): void {
+    this.touched = true
     this.state = next
     for (const listener of this.listeners) listener()
   }
 
-  /** 当前 general 段（setter 整段写回用） */
-  private get general(): NavSettingsSection['general'] {
-    return {
-      style: this.state.style,
-      align: this.state.align,
-      scrollBehavior: this.state.scrollBehavior,
-      showCount: this.state.showCount,
-      showSearch: this.state.showSearch,
-      showQuickSettings: this.state.showQuickSettings,
-      showFavorites: this.state.showFavorites,
-      searchScopes: this.state.searchScopes,
-      railOffset: this.state.railOffset,
-    }
-  }
-
-  /** 当前风格段的完整值（setter 局部 patch 的基础） */
-  private get styleValues(): { bandHeight: BandHeight; cardCount: CardCount; cardItems: CardItem[]; markTone: MarkTone; showPaging: ShowMode } {
-    return {
-      bandHeight: this.state.bandHeight,
-      cardCount: this.state.cardCount,
-      cardItems: this.state.cardItems,
-      markTone: this.state.markTone,
-      showPaging: this.state.showPaging,
-    }
-  }
-
-  /** 按当前风格构造 write 的 styles 段（只含当前风格键，绝不染指其他风格段） */
-  private stylePatch(extra: Partial<StyleWireSection>): NavSettingsSection['styles'] {
-    const section = { ...this.styleValues, ...extra }
-    const patch: Partial<Record<NavStyle, StyleWireSection>> = {}
-    patch[this.state.style] = section
-    return patch
+  /**
+   * 是否有用户层修改（宿主 user 段存在，或本进程还有未确认的写入）。
+   *
+   * 取**真实来源**而不是照抄旧 state：宿主写入要 ~1.5s reconcile，
+   * 用户刚点的那一下还没进快照——只看快照会让设置页显示"未修改"。
+   */
+  private isOverridden(): boolean {
+    if (this.touched) return true
+    const user = this.scope?.getSnapshot().user as NavSettingsSection | undefined
+    if (user !== undefined && (user.general !== undefined || user.styles !== undefined)) return true
+    return Object.keys(this.pending).length > 0
   }
 
   /** @returns the current state (stable reference until the next change). */
   getSnapshot(): NavSettingsState {
-    return this.state
+    return { ...this.state, overridden: this.isOverridden() }
   }
 
   /** Observe state replacements; returns the disposer. */
@@ -339,30 +448,149 @@ export class NavSettingsController {
   }
 
   /**
-   * 写回宿主：scope.set 契约只接受 section 内**标量**字段，嵌套 section
-   * （general/styles 对象）无法经它持久化，所以走 host 桥
-   * （POST /mega-chat-nav/settings → settings.update 深层 merge + revision 围栏）。
+   * 写回宿主（0.1.7 路径级写入）。
+   *
+   * 用 `mutate([{op:'set', path, value}])` 而不是整段写回：宿主按 path **merge**，
+   * 天然没有「整对象读-改-写」的竞争窗口（多开关快速连点不会互相覆盖）。
+   * 调用方已先做**乐观提交**（本地状态即时生效），此处只负责回写与失败告警；
+   * 宿主接受后镜像会推来新快照，derive 会把它折回本控制器状态。
+   *
+   * 注：只有 `Config` 里标了 `volatile` 的字段可被实时写入（整对象已标）。
    */
-  private write(patch: NavSettingsSection): void {
-    if (this.scope === undefined) return
-    const revision = this.scope.getSnapshot().revision
-    void fetch('/mega-chat-nav/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patch, revision: revision ?? undefined }),
-    })
-      .then((resp) => resp.json().catch(() => ({})) as Promise<{ ok?: boolean }>)
-      .then((data) => {
-        if (!data.ok) console.error('[mega-chat-nav] settings write rejected')
-      })
-      .catch((e: unknown) => console.error('[mega-chat-nav] settings write failed:', e))
+  private writePath(ops: readonly SettingsPathOp[]): void {
+    const form = this.scope
+    if (form === undefined || ops.length === 0) return
+    const snapshot = form.getSnapshot()
+    if (!snapshot.writable) return
+    // 先本地记下意图（写穿 localStorage）：宿主写盘 + reconcile 约 1.5s，
+    // 期间刷新会丢——恢复时由 replayPending 重新提交
+    const paths: string[] = []
+    for (const op of ops) {
+      if (op.op === 'set') {
+        const key = pathKey(op.path)
+        this.pending[key] = op.value
+        paths.push(key)
+      }
+    }
+    writePendingCache(this.pending)
+    for (const key of paths) this.scheduleWrite(key)
+  }
+
+  /**
+   * 防抖调度一次字段写入：把快速连点**合并成一次**宿主写入，携带最终值。
+   *
+   * 两层配合才正确（缺一不可，与 mega-settings 的修法一致）：
+   *  1. 本函数——防抖合并，避免宿主串行回放整串中间值（每次写入约 1.5s）；
+   *  2. {@link dirtyGen}——写入未落定期间 reconcile 不摘该字段覆盖，
+   *     否则会被先落定的中间值顶回，UI 出现 true/false 缓慢翻转。
+   *
+   * @param key - 字段路径（如 `general.align` / `styles.codex.cardCount`）
+   */
+  private scheduleWrite(key: string): void {
+    const form = this.scope
+    if (form === undefined) return
+    this.dirtyGen.set(key, (this.dirtyGen.get(key) ?? 0) + 1)
+    const old = this.timers.get(key)
+    if (old !== undefined) clearTimeout(old)
+    const timer = setTimeout(() => {
+      this.timers.delete(key)
+      // 发的是**此刻**的最终意图：防抖窗口内的后续点击已覆盖 pending
+      this.sendWrite(key)
+    }, SETTINGS_WRITE_DEBOUNCE_MS)
+    this.timers.set(key, timer)
+  }
+
+  /**
+   * 摘除已被宿主确认的 pending：宿主快照里该路径的值与意图一致，即视为落盘完成。
+   * 不一致的（仍在 reconcile 途中）保留，等下一次快照到达再判。
+   */
+  private reconcilePending(): void {
+    const form = this.scope
+    if (form === undefined) return
+    const value = form.getSnapshot().value
+    let changed = false
+    for (const key of Object.keys(this.pending)) {
+      // 该字段还有防抖等待或在途写入：保留覆盖，等它落定（否则会被中间值顶回）
+      if ((this.dirtyGen.get(key) ?? 0) > 0) continue
+      if (sameValue(readPath(value, key.split('.')), this.pending[key])) {
+        delete this.pending[key]
+        changed = true
+      }
+    }
+    if (changed) {
+      writePendingCache(this.pending)
+      // 最后一次未确认写入已被宿主接受：本会话的"刚改"标记归位
+      if (Object.keys(this.pending).length === 0) this.touched = false
+    }
+  }
+
+  /**
+   * 重放上次未确认的写入（刷新打断的残留）：按路径重新提交宿主。
+   * 宿主确认后由 {@link reconcilePending} 摘下并清缓存。
+   */
+  private replayPending(): void {
+    const form = this.scope
+    if (form === undefined) return
+    const keys = Object.keys(this.pending)
+    if (keys.length === 0) return
+    if (!form.getSnapshot().writable) return
+    // 逐字段调度（各自防抖合并）：刷新打断的残留重新提交宿主
+    for (const key of keys) this.scheduleWrite(key)
+  }
+
+  /**
+   * 立即把待发的字段写入发出去（跳过防抖等待）。
+   *
+   * 供测试与"用户离开页面/立即需要落盘"的场景使用：生产路径靠 400ms 防抖自然触发。
+   */
+  flushWrites(): void {
+    for (const [key, timer] of [...this.timers]) {
+      clearTimeout(timer)
+      this.timers.delete(key)
+      this.sendWrite(key)
+    }
+  }
+
+  /** 真正发出一次字段写入（防抖到期或 flush 时调用）；落定后递减 dirty 计数并尝试摘覆盖。 */
+  private sendWrite(key: string): void {
+    const form = this.scope
+    if (form === undefined) return
+    const value = this.pending[key]
+    if (value === undefined) return
+    const revision = form.getSnapshot().revision
+    const settle = (): void => {
+      const n = this.dirtyGen.get(key) ?? 0
+      if (n <= 1) this.dirtyGen.delete(key)
+      else this.dirtyGen.set(key, n - 1)
+      this.reconcilePending()
+    }
+    void form.mutate([{ op: 'set', path: key.split('.'), value }], revision).then(
+      (accepted) => {
+        settle()
+        if (!accepted) console.warn('[mega-chat-nav] settings write refused by host')
+      },
+      (e: unknown) => {
+        settle()
+        console.error('[mega-chat-nav] settings write failed:', e)
+      },
+    )
+  }
+
+  /** 单字段路径写（general 段） */
+  private writeGeneral(field: string, value: unknown): void {
+    this.writePath([{ op: 'set', path: ['general', field], value }])
+  }
+
+  /** 单字段路径写（**当前风格**的 styles.<style> 段；绝不染指其他风格段） */
+  private writeStyle(field: string, value: unknown): void {
+    this.writePath([{ op: 'set', path: ['styles', this.state.style, field], value }])
   }
 
   /** Route the user's anchor-edge choice to the Host document. */
   setAlign(align: RailAlign): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, align })
-    this.write({ general: { ...this.general, align } })
+    this.writeGeneral('align', align)
   }
 
   /** Route the user's style choice to the Host document（切换后随即载入该风格自己的独立配置） */
@@ -371,56 +599,56 @@ export class NavSettingsController {
     const snapshot = this.scope.getSnapshot()
     const next = this.derive({ ...snapshot, value: { ...snapshot.value, general: { ...snapshot.value?.general, style } } })
     this.commit({ ...next, overridden: this.state.overridden })
-    this.write({ general: { ...this.general, style } })
+    this.writeGeneral('style', style)
   }
 
   /** Route the user's band-height choice to the Host document（写入当前风格的独立段） */
   setBandHeight(band: BandHeight): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, bandHeight: band })
-    this.write({ styles: this.stylePatch({ bandHeight: band }) })
+    this.writeStyle('bandHeight', band)
   }
 
   /** Route the user's scroll-mode choice to the Host document. */
   setScrollMode(mode: ScrollMode): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, scrollBehavior: mode })
-    this.write({ general: { ...this.general, scrollBehavior: mode } })
+    this.writeGeneral('scrollBehavior', mode)
   }
 
   /** Route the user's count-badge display mode to the Host document. */
   setShowCount(mode: ShowMode): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, showCount: mode })
-    this.write({ general: { ...this.general, showCount: mode } })
+    this.writeGeneral('showCount', mode)
   }
 
   /** Route the user's search-button display mode to the Host document. */
   setShowSearch(mode: ShowMode): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, showSearch: mode })
-    this.write({ general: { ...this.general, showSearch: mode } })
+    this.writeGeneral('showSearch', mode)
   }
 
   /** Route the user's quick-settings display mode to the Host document. */
   setShowQuickSettings(mode: ShowMode): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, showQuickSettings: mode })
-    this.write({ general: { ...this.general, showQuickSettings: mode } })
+    this.writeGeneral('showQuickSettings', mode)
   }
 
   /** Route the user's favorite-button display mode to the Host document. */
   setShowFavorites(mode: ShowMode): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, showFavorites: mode })
-    this.write({ general: { ...this.general, showFavorites: mode } })
+    this.writeGeneral('showFavorites', mode)
   }
 
   /** Route the user's paging-marker display mode to the Host document（写入当前风格独立段） */
   setShowPaging(mode: ShowMode): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, showPaging: mode })
-    this.write({ styles: this.stylePatch({ showPaging: mode }) })
+    this.writeStyle('showPaging', mode)
   }
 
   /** Route the user's search-scope selection to the Host document（用户必选，强制保留且置于首位） */
@@ -428,7 +656,7 @@ export class NavSettingsController {
     if (this.scope === undefined) return
     const normalized = ['user' as SearchScope, ...scopes.filter((s) => s !== 'user')]
     this.commit({ ...this.state, searchScopes: normalized })
-    this.write({ general: { ...this.general, searchScopes: normalized } })
+    this.writeGeneral('searchScopes', normalized)
   }
 
   /** Route the user's rail-offset choice to the Host document（0-32px 取整钳制） */
@@ -436,27 +664,27 @@ export class NavSettingsController {
     if (this.scope === undefined) return
     const clamped = Math.max(RAIL_OFFSET_MIN, Math.min(RAIL_OFFSET_MAX, Math.round(offset)))
     this.commit({ ...this.state, railOffset: clamped })
-    this.write({ general: { ...this.general, railOffset: clamped } })
+    this.writeGeneral('railOffset', clamped)
   }
 
   /** Route the user's cascade-card count to the Host document（写入当前风格的独立段） */
   setCardCount(count: CardCount): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, cardCount: count })
-    this.write({ styles: this.stylePatch({ cardCount: count }) })
+    this.writeStyle('cardCount', count)
   }
 
   /** Route the user's card-content selection to the Host document（写入当前风格的独立段） */
   setCardItems(items: CardItem[]): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, cardItems: items })
-    this.write({ styles: this.stylePatch({ cardItems: items }) })
+    this.writeStyle('cardItems', items)
   }
 
   /** Route the user's mark-tone choice to the Host document（codex 刻度色调；写入当前风格段） */
   setMarkTone(tone: MarkTone): void {
     if (this.scope === undefined) return
     this.commit({ ...this.state, markTone: tone })
-    this.write({ styles: this.stylePatch({ markTone: tone }) })
+    this.writeStyle('markTone', tone)
   }
 }

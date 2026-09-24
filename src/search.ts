@@ -131,19 +131,6 @@ function tryGet<T>(getter: () => T): T | undefined {
   try { return getter() } catch { return undefined }
 }
 
-function readBody(req: unknown): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = req as { on?(ev: 'data' | 'end' | 'error', cb: (chunk?: unknown) => void): void }
-    const chunks: Buffer[] = []
-    r.on?.('data', (chunk) => {
-      if (typeof chunk === 'string') chunks.push(Buffer.from(chunk))
-      else if (chunk instanceof Uint8Array) chunks.push(Buffer.from(chunk))
-    })
-    r.on?.('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
-    r.on?.('error', reject)
-  })
-}
-
 interface SessionsLike { get(id: string): { events?: readonly unknown[] } | undefined }
 interface PersistenceLike { readRaw(id: string): unknown }
 /** 0.1.2 线：sessionQuery 服务的 observeSession（live 优先 + 持久化冷读合并） */
@@ -276,11 +263,7 @@ export function registerSearchRoute(ctx: Context): void {
     const sessions = (scoped as unknown as { sessions?: SessionsLike }).sessions
     const sessionQuery = (scoped as unknown as { sessionQuery?: QueryLike }).sessionQuery
     if (!webServer || !sessions) return
-    ctx.inject(['settings'], (settingsCtx) => {
-      const settingsService = (settingsCtx as unknown as {
-        settings?: { update(ns: string, patch: object, expectedRevision?: number): Promise<void> }
-      }).settings
-      if (!settingsService) return
+    {
       ctx.effect(() => {
         const dispose = webServer.register({
           kind: 'prefix',
@@ -295,30 +278,8 @@ export function registerSearchRoute(ctx: Context): void {
             }
             try {
               const url = new URL(httpReq.url ?? '/', 'http://localhost')
-              // 嵌套配置写回：scope.set 仅支持 section 内标量，嵌套 section 必须走 host 桥
-              if (url.pathname === '/mega-chat-nav/settings') {
-                if ((httpReq.method ?? 'GET') !== 'POST') { write(405, { ok: false, error: 'POST required' }); return }
-                const raw = await readBody(req)
-                let patch: unknown
-                let revision: unknown
-                try {
-                  const body = JSON.parse(raw) as { patch?: unknown; revision?: unknown }
-                  patch = body.patch
-                  revision = body.revision
-                } catch {
-                  write(400, { ok: false, error: 'bad json' }); return
-                }
-                if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
-                  write(400, { ok: false, error: 'patch must be an object' }); return
-                }
-                try {
-                  await settingsService.update('mega-chat-nav', patch, typeof revision === 'number' ? revision : undefined)
-                } catch (e) {
-                  write(409, { ok: false, error: 'settings conflict: ' + String(e) }); return
-                }
-                write(200, { ok: true })
-                return
-              }
+              // 注：旧版为「嵌套 section 写回」提供过 /mega-chat-nav/settings host 桥；
+              // 0.1.7 起配置写入由官方 configForms（路径级 mutate）承担，该桥已移除。
               if (url.pathname !== '/mega-chat-nav/search') { write(404, { ok: false, error: 'not found' }); return }
               const sessionId = url.searchParams.get('session') ?? ''
               const q = (url.searchParams.get('q') ?? '').trim()
@@ -328,7 +289,7 @@ export function registerSearchRoute(ctx: Context): void {
                 ? 0
                 : Math.max(0, Math.min(Number(rawLimit) || 0, 500))
               if (!sessionId || q.length < 1) { write(400, { ok: false, error: 'session & q required' }); return }
-            // 搜索内容范围（多选）；缺省全选；user 必选强制保留
+              // 搜索内容范围（多选）；缺省全选；user 必选强制保留
             const rawScopes = (url.searchParams.get('scopes') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
             const scopes = rawScopes.length > 0
               ? [...new Set(['user', ...rawScopes])].filter((s) => s === 'user' || s === 'assistant' || s === 'tool')
@@ -346,7 +307,7 @@ export function registerSearchRoute(ctx: Context): void {
         },
       })
       return dispose as unknown as () => void
-      })
     })
+    }
   })
 }

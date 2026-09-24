@@ -63,6 +63,15 @@ export const MARK_TONE_OPTIONS = ['soft', 'deep'] as const
 export type MarkTone = typeof MARK_TONE_OPTIONS[number]
 export const DEFAULT_MARK_TONE: MarkTone = 'deep'
 
+/**
+ * 本插件在 profile 里的条目 id —— 0.1.7 起它**就是设置命名空间**
+ * （`ctx.configForms.get(entryId)`），必须与 cordis.patch.yml 的 `id` 一致。
+ *
+ * 放在 shared 而不是 host settings：客户端要用它取配置表单，而 host settings 模块
+ * 会引入 schemastery（浏览器模块表里没有该包，客户端 bundle 引到它就是致命错误）。
+ */
+export const MEGA_CHAT_NAV_ENTRY_ID = 'ui-mega-chat-nav'
+
 export const DEFAULT_STYLE: NavStyle = 'minimal'
 export const DEFAULT_ALIGN: RailAlign = 'left'
 export const DEFAULT_BAND: BandHeight = 'standard'

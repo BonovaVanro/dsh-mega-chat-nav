@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.1.7-rc.1（适配 dsh v0.1.7-rc.1）
+
+[中文](#cn-v0.1.7-rc.1) | [English](#en-v0.1.7-rc.1)
+
+dsh **0.1.7-rc.1** 重构了插件的设置/配置模型：旧的 `ctx.settings.register` 已从运行时移除，配置改由插件**导出的 schema** 自动派生，客户端读写入口与写入方式也一并更换。本版本据此完成迁移，并改为只声明兼容 **0.1.7-rc 线**。
+
+<h3 id="cn-v0.1.7-rc.1">适配破坏性变更</h3>
+
+- **配置声明方式**：改为导出 `Config` schema，设置命名空间与配置表单由 dsh 自动派生；命名空间不再是自造的字符串，而是 **profile 条目 id**（`ui-mega-chat-nav`）。
+- **设置读写**：客户端改经官方的配置表单接口读写，写入采用**按字段路径提交**——多个开关快速连点不会互相覆盖（旧写法是整段读-改-写，存在覆盖窗口）。
+- **配置承载位置**：改由 profile 的条目配置段承载；旧的 `settings.yaml` 在 0.1.7 已不再是配置中心。
+- **写入不丢**：宿主落盘需要一点时间，此前在这段时间内刷新页面会丢掉刚改的设置。现在改动会先在本机留存、并在下次打开时自动补交宿主——与 mega-settings 的做法一致。
+- **连续切换不再「回放」**：快速来回切换同一个开关时，界面会瞬间停在最终值，但底层设置会照着中间值逐个翻转一遍。现在连续操作会**合并为一次提交**（只带最终值），且提交未落定前不会被中间值顶回。
+- **兼容性校验开关**：读取入口改为**本插件自己的配置**（`compatCheck`）——0.1.7 的契约是各 mega 插件读自己的配置，不再有跨插件的开关读取；未设置时按缺省照常校验（详见下节）。
+
+<h3 id="cn-v0.1.7-rc.1">兼容性开关：一处关闭、全体静音</h3>
+
+- 新增家族公共配置 **`~/.dsh/mega.json`**（有 `DSH_HOME` 时在 `$DSH_HOME/mega.json`）：写 `{ "compatCheck": false }` 即可让**所有 mega 系插件**都不再打印 dsh 版本不适配的提醒；改成 `true` 或删掉文件即恢复。
+- **未装 mega-settings 时同样有效**——这正是它存在的意义：0.1.7 的配置按插件分开存放，没装设置宿主时用户根本没有关闭入口。
+- 优先级：**本插件自己的配置 → 家族公共配置 → 缺省开启**。你在插件设置里显式设过的值优先（公共配置是批量默认，不是强制覆盖）。
+- 只认布尔值：写成 `"false"` 字符串、`0`、`null` 一律视为未配置，不会误关校验。
+- 改完需**重启 dsh** 生效（配置在插件启动时读取）。
+
+<h3 id="cn-v0.1.7-rc.1">兼容性</h3>
+
+- 本次为**破坏性变更**：同一个包无法同时兼容 0.1.5-rc 与 0.1.7，因此 **0.1.7 线由本分支单独维护**，0.1.5-rc 线继续由 0.1.5 线（`0.1.5-rc.2-update.2`）维护。
+- 声明兼容 **0.1.7-rc.***；0.1.7-alpha 线仍会打印「可能不适配」提示（alpha 统一不声明兼容）。
+
+dsh **0.1.7-rc.1** reworked how plugins declare and edit their configuration: the old `ctx.settings.register` is gone from the runtime, configuration is derived from a **schema the plugin exports**, and the browser-side read/write entry points changed with it. This release completes that migration and declares compatibility with the **0.1.7-rc line only**.
+
+<h3 id="en-v0.1.7-rc.1">Breaking-change migration</h3>
+
+- **How configuration is declared**: the plugin now exports a `Config` schema; dsh derives the settings namespace and its configuration form from it. The namespace is no longer a hand-written string but the **profile entry id** (`ui-mega-chat-nav`).
+- **Reading and writing settings**: the browser half now goes through dsh's official configuration-form API, and writes are submitted **per field path** — flicking several switches in a row can no longer overwrite one another (the old shape read, edited and wrote the whole section back).
+- **Where configuration lives**: it is now carried by the profile entry's configuration section; `settings.yaml` is no longer the configuration centre in 0.1.7.
+- **Writes are no longer lost**: the Host needs a moment to persist a change, and refreshing within that window used to drop it. A change is now kept locally first and re-submitted automatically next time — the same approach mega-settings takes.
+- **Rapid toggling no longer replays**: flicking one switch back and forth left the UI on the final value while the stored setting walked through every intermediate value. Consecutive changes are now **merged into a single submission** carrying only the final value, and an unsettled submission can no longer be pushed back by those intermediate values.
+- **Compatibility-check switch**: it is now read from the plugin's **own configuration** (`compatCheck`) — under 0.1.7 each mega plugin reads its own configuration, so the cross-plugin switch lookup is gone; when unset the check still runs (see the next section).
+
+<h3 id="en-v0.1.7-rc.1">One switch that silences the whole family</h3>
+
+- New family-wide config **`~/.dsh/mega.json`** (`$DSH_HOME/mega.json` when `DSH_HOME` is set): write `{ "compatCheck": false }` and **every mega plugin** stops printing the "may be incompatible with this dsh version" notice; set it back to `true` or delete the file to restore the notices.
+- **It works without mega-settings installed** — which is the point: under 0.1.7 each plugin's configuration lives in its own entry, so without the settings host there is no switch to turn off at all.
+- Precedence: **this plugin's own configuration → the family file → on by default**. A value you set explicitly in the plugin's settings wins (the family file is a batch default, not a forced override).
+- Only real booleans count: the string `"false"`, `0` and `null` are all treated as unset, so a typo cannot silently disable the check.
+- Restart dsh for a change to take effect (the value is read when the plugin starts).
+
+<h3 id="en-v0.1.7-rc.1">Compatibility</h3>
+
+- This is a **breaking migration**: one package cannot serve both 0.1.5-rc and 0.1.7, so the **0.1.7 line is maintained by this branch**, while the 0.1.5-rc line stays on the 0.1.5 line (`0.1.5-rc.2-update.2`).
+- Compatibility is declared for **0.1.7-rc.***; the 0.1.7-alpha line still prints the "may be incompatible" notice (alpha releases never carry a compatibility claim).
+
 ## 0.1.5-rc.2-update.2（适配 dsh v0.1.6-alpha.2）
 
 [中文](#cn-v0.1.5-rc.2-update.2) | [English](#en-v0.1.5-rc.2-update.2)
