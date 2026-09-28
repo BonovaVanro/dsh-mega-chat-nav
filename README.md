@@ -112,21 +112,22 @@ DSH（DeepSeek Harness）的**会话提问导航条**：在会话一侧显示整
 
 | 你的 dsh | 用哪个 | 说明 |
 |---|---|---|
-| **0.1.7-rc 线** | 本分支（`0.1.7-rc.2`） | 当前开发线，适配 0.1.7-rc.2 |
-| 0.1.5-rc 线 | `latest`（`0.1.5-rc.2-update.2`） | 稳定线，由 `main` / `0.1.5` 分支维护 |
+| **0.1.7-rc 线** | **`latest`**（`0.1.7-rc.2`） | 由上表对应分支 `main` 维护（`main` 即 0.1.7 线） |
+| 0.1.5-rc 线 | 指定版本 `0.1.5-rc.2-update.2` | 稳定线，由 `0.1.5` 分支维护 |
 
-**npm**（0.1.7-rc 线）
-
-```
-dsh plugin --profile web add dsh-mega-chat-nav@next
-```
-
-**GitHub tag**（0.1.7-rc 线）
+**npm**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#next
-# 或锁定具体版本
+dsh plugin --profile web add dsh-mega-chat-nav@latest
+```
+
+**GitHub tag**
+
+```
+# 当前版本
 dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.7-rc.2
+# 或跟着（浮动）标签走
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#latest
 ```
 
 **本地包**

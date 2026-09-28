@@ -111,21 +111,22 @@ On screens narrower than 1024px, the nav strip is lightened to a search-only aff
 
 | Your dsh | Use | Notes |
 |---|---|---|
-| **0.1.7-rc line** | this branch (`0.1.7-rc.2`) | current line, adapted to 0.1.7-rc.2 |
-| 0.1.5-rc line | `latest` (`0.1.5-rc.2-update.2`) | stable line, kept on `main` / `0.1.5` |
+| **0.1.7-rc line** | **`latest`** (`0.1.7-rc.2`) | maintained by the matching branch `main` (`main` *is* the 0.1.7 line) |
+| 0.1.5-rc line | pin `0.1.5-rc.2-update.2` | stable line, maintained by the `0.1.5` branch |
 
-**npm** (0.1.7-rc line)
-
-```
-dsh plugin --profile web add dsh-mega-chat-nav@next
-```
-
-**GitHub tag** (0.1.7-rc line)
+**npm**
 
 ```
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#next
-# or pin an exact version
+dsh plugin --profile web add dsh-mega-chat-nav@latest
+```
+
+**GitHub tag**
+
+```
+# current release
 dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.7-rc.2
+# or follow the floating tag
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#latest
 ```
 
 **Local package**
