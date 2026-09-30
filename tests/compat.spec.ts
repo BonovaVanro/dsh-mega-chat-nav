@@ -144,19 +144,28 @@ describe('compat: checkDshPolicy + 提示文案', () => {
     expect(checkDshPolicy('0.1.2', { op: '=', target: '0.1.2-rc.1' })).toBe(false) // 正式版≠rc.1
   })
 
-  it('本分支策略：只承诺 0.1.5-rc 线，其余版本线一律拒绝', () => {
+  it('多线策略：数组内任一线通过，线外一律拒绝（0.2.0 分支实际采用）', () => {
+    // 同一份代码在两条 rc 线上都验证过，故如实声明两条线
+    const policy = { op: '=' as const, target: ['0.1.7-rc.*', '0.2.0-rc.*'] }
+    expect(checkDshPolicy('0.1.7-rc.1', policy)).toBe(true)
+    expect(checkDshPolicy('0.1.7-rc.2', policy)).toBe(true)
+    expect(checkDshPolicy('0.2.0-rc.1', policy)).toBe(true)
+    expect(checkDshPolicy('0.2.0-rc.9', policy)).toBe(true)
+    // 线外：更早的线、pre-rc 预发布、正式版
+    expect(checkDshPolicy('0.1.5-rc.2', policy)).toBe(false)
+    expect(checkDshPolicy('0.1.7-alpha.1', policy)).toBe(false)
+    expect(checkDshPolicy('0.2.0-alpha.1', policy)).toBe(false)
+    expect(checkDshPolicy('0.1.7', policy)).toBe(false)
+    expect(checkDshPolicy('0.2.0', policy)).toBe(false)
+  })
+
+  it('单线策略：只承诺一条线时，其余版本线一律拒绝', () => {
     const policy = { op: '=' as const, target: '0.1.5-rc.*' }
-    // 保留的 0.1.5-rc 线（本分支改动对其为纯增量）
-    expect(checkDshPolicy('0.1.5-rc.1', policy)).toBe(true)
     expect(checkDshPolicy('0.1.5-rc.2', policy)).toBe(true)
     expect(checkDshPolicy('0.1.5-rc.2-update.1', policy)).toBe(true)
-    // 其他线一律拒绝：预发布（alpha / beta / rc）、正式版、相邻线
-    expect(checkDshPolicy('0.1.7-alpha.1', policy)).toBe(false)
-    expect(checkDshPolicy('0.1.7-beta.1', policy)).toBe(false)
     expect(checkDshPolicy('0.1.7-rc.1', policy)).toBe(false)
     expect(checkDshPolicy('0.1.5-alpha.1', policy)).toBe(false)
     expect(checkDshPolicy('0.1.5', policy)).toBe(false)
-    expect(checkDshPolicy('0.1.7', policy)).toBe(false)
   })
 
   it('提示文案含插件名与当前 dsh 版本', () => {

@@ -107,32 +107,36 @@ On screens narrower than 1024px, the nav strip is lightened to a search-only aff
 
 ## Installation
 
-**Pick the line that matches your dsh** — the two packages are **mutually incompatible** (0.1.7 reworked how plugins declare and edit configuration), so never mix them:
+**Pick the line that matches your dsh** — the packages are **mutually incompatible** across lines (0.1.7 reworked how plugins declare and edit configuration, 0.2.0 changed the dependency line), so never mix them:
 
-| Your dsh | Use | Notes |
+| Your dsh | Use | Branch |
 |---|---|---|
-| **0.1.7-rc line** | **`latest`** (`0.1.7-rc.2`) | maintained by the matching branch `main` (`main` *is* the 0.1.7 line) |
-| 0.1.5-rc line | pin `0.1.5-rc.2-update.2` | stable line, maintained by the `0.1.5` branch |
+| **0.2.0-rc line** | `0.2.0-rc.1` (this one) | `0.2.0` |
+| 0.1.7-rc line | `latest` (`0.1.7-rc.2`) | `main` |
+| 0.1.5-rc line | `0.1.5-rc.2-update.2` | `0.1.5` |
 
 **npm**
 
 ```
+# 0.2.0-rc line (by version, or another dist-tag)
+dsh plugin --profile web add dsh-mega-chat-nav@0.2.0-rc.1
+# 0.1.7-rc line
 dsh plugin --profile web add dsh-mega-chat-nav@latest
 ```
 
 **GitHub tag**
 
 ```
-# current release
-dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.1.7-rc.2
-# or follow the floating tag
+# 0.2.0-rc line (this release)
+dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#v0.2.0-rc.1
+# 0.1.7-rc line
 dsh plugin --profile web add github:BonovaVanro/dsh-mega-chat-nav#latest
 ```
 
 **Local package**
 
 ```
-dsh plugin --profile web add dsh-mega-chat-nav-0.1.7-rc.2.tgz
+dsh plugin --profile web add dsh-mega-chat-nav-0.2.0-rc.1.tgz
 ```
 
 <details>

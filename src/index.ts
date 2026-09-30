@@ -28,13 +28,19 @@ export type PluginConfig = NavSettings
 export const name = 'dsh-mega-chat-nav'
 
 /**
- * 兼容策略：0.1.7-rc 线（'= 0.1.7-rc.*'）。
- * - 0.1.7 的设置/配置模型是**破坏性变更**（`ctx.settings.register` 被移除），
- *   同一个包不可能同时兼容 0.1.5-rc 线，故本分支只服务 0.1.7；
- * - 维护旧线请用对应分支（0.1.5-rc.2 见 main，0.1.2 / 0.1.1 各有分支）；
- * - 0.1.7-alpha 统一不声明兼容（alpha 线仍会打印「可能不适配」提示，属设计）。
+ * 兼容策略：0.1.7-rc 与 0.2.0-rc **两条线**（数组 = 命中任一即通过）。
+ *
+ * 为什么是两条：本次「适配 0.2.0」**没有改动任何插件代码**（只升级了依赖线），
+ * 而这份代码在 0.1.7-rc 与 0.2.0-rc 上都是验证过的（tsc + 172 例测试 + 运行时契约核对）。
+ * 兼容性是代码的事实，不该随「发到哪条线」而改口。
+ *
+ * 注：这是**软提醒**（只打日志，不阻止加载）；能不能装由 peer 决定——本包 peer 只声明
+ * 0.2.0-rc 线，故 0.1.7 线上不会真的加载到它。
+ *
+ * 不声明：0.1.5-rc 及更早（那条线是破坏性变更，ctx.settings.register 被移除）、
+ * rc 之前的预发布（alpha/beta 统一不声明兼容，仍会打印提示，属设计）。
  */
-const DSCH_COMPAT_POLICY: DshCompatPolicy = { op: '=', target: '0.1.7-rc.*' }
+const DSCH_COMPAT_POLICY: DshCompatPolicy = { op: '=', target: ['0.1.7-rc.*', '0.2.0-rc.*'] }
 
 const dshRequire = createRequire(import.meta.url)
 

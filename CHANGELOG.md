@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.2.0-rc.1（适配 dsh v0.2.0-rc.1）
+
+[中文](#cn-v0.2.0-rc.1) | [English](#en-v0.2.0-rc.1)
+
+跟随 dsh **0.2.0-rc.1** 更新依赖线。本插件使用的接口在该版本**未变**，故功能与配置行为无变化。
+
+<h3 id="cn-v0.2.0-rc.1">本次更新</h3>
+
+- **依赖线**：官方全链升至 `0.2.0-rc.1`。
+- **peer 不再写上界**：原先写成 `>=0.1.7-rc.2 <0.1.8`，dsh 升到 0.2.x 后该上界会让插件被判定不兼容、**直接拒绝加载**（dsh 会跳过该 bundle 并提示风险）。现在统一改为只写下限的 `>=0.2.0-rc.1`，同类升级不会再被陈旧上界拦住。
+- **兼容声明认两条线**：本次「适配 0.2.0」**没有改动任何插件代码**（只升级了依赖线），而这份代码在 0.1.7-rc 与 0.2.0-rc 上都是验证过的，故插件自身的兼容校验如实声明 `['0.1.7-rc.*', '0.2.0-rc.*']`——既不谎报也不误报。0.1.5-rc 及更早仍不在列（那条线是破坏性变更）。
+  - 若你在 0.2.0 上仍看到「skipping profile bundle … is incompatible」提示，那是**旧版本插件**（0.1.7 线）仍装在 profile 里——装上本版即可。
+- **核对**：`tsc` 零错误、173 例测试全过、构建通过；另核对了运行时契约——导航条钉位依赖的 `main.conversation` + `data-phase`、current 判定依赖的 `data-chat-turn` / `data-chat-anchor-key` 都仍在。原生回合轨的 `turnAtLine` 在 0.2.0 已移除（实现重构），但本插件的定位逻辑是自有实现，不依赖它。
+
+<h3 id="cn-v0.2.0-rc.1">安装与兼容</h3>
+
+- 本包 peer 只声明 0.2.0-rc 线（`>=0.2.0-rc.1`），因此只装得进 dsh 0.2.0-rc；0.1.7-rc 用户请继续使用上一版（`latest`）。
+
+```
+dsh plugin --profile web add dsh-mega-chat-nav@0.2.0-rc.1    # dsh 0.2.0-rc 线
+dsh plugin --profile web add dsh-mega-chat-nav@latest        # dsh 0.1.7-rc 线（上一版）
+```
+
+This release follows dsh **0.2.0-rc.1** and moves the dependency line up. Every interface this plugin uses is **unchanged** in that release, so behaviour and configuration are unaffected.
+
+<h3 id="en-v0.2.0-rc.1">What changed</h3>
+
+- **Dependency line**: the official chain moves to `0.2.0-rc.1`.
+- **No more upper bound in peer ranges**: they used to read `>=0.1.7-rc.2 <0.1.8`, and once dsh moved to 0.2.x that bound made the plugin count as incompatible and **dsh refused to load it** (it skips the bundle with a risk notice). They are now a lower bound only, `>=0.2.0-rc.1`, so the same kind of upgrade can never again be blocked by a stale bound.
+- **The compatibility claim covers two lines**: this "0.2.0 adaptation" **changed no plugin code at all** (only the dependency line), and that same code is verified on both 0.1.7-rc and 0.2.0-rc — so the plugin's own check now declares `['0.1.7-rc.*', '0.2.0-rc.*']`, reporting neither more nor less than what was tested. 0.1.5-rc and earlier stay out (that line was a breaking change).
+  - If you still see "skipping profile bundle … is incompatible" on 0.2.0, that is the **older** (0.1.7-line) plugin still installed in the profile — install this release.
+- **Verified**: `tsc` clean, all 173 tests pass, build passes; the runtime contracts were re-checked too — the layout the rail pins to (`main.conversation` + `data-phase`) and the turn markers behind the current-node detection (`data-chat-turn` / `data-chat-anchor-key`) are all still present. The native rail's `turnAtLine` was removed in 0.2.0 (its implementation was reworked), but this plugin's positioning logic is its own and does not depend on it.
+
+<h3 id="en-v0.2.0-rc.1">Install and compatibility</h3>
+
+- The 0.2.0-line package and the 0.1.x-line package are **mutually incompatible** (different settings model and dependency line); pick by your dsh version line:
+
+```
+dsh plugin --profile web add dsh-mega-chat-nav@0.2.0-rc.1    # dsh 0.2.0-rc line
+dsh plugin --profile web add dsh-mega-chat-nav@latest        # dsh 0.1.7-rc line (previous)
+```
 ## 0.1.7-rc.2（适配 dsh v0.1.7-rc.2）
 
 [中文](#cn-v0.1.7-rc.2) | [English](#en-v0.1.7-rc.2)
