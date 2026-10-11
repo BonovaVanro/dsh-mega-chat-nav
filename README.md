@@ -106,6 +106,17 @@ DSH（DeepSeek Harness）的**会话提问导航条**：在会话一侧显示整
   <sub>图 9 · 搜索抽屉</sub>
 </div>
 
+## 兼容环境
+
+同一份包**同时服务 Web 版与桌面版**（DSH Desktop），无需单独构建：
+
+| 环境 | 安装方式 |
+|---|---|
+| **Web 版**（`dsh web` / `dsh --profile web`） | 用下节的 CLI 命令安装 |
+| **桌面版**（DSH Desktop） | 在**桌面应用的插件市场**里安装/升级 —— 它的 profile 由桌面应用独占管理，`dsh plugin --profile desktop …` 会被拒绝（`profile "desktop" is managed exclusively by the Electron application`） |
+
+为什么一份包两边都能用：dsh 的**客户端平台只有 `web` 一个值**（`dsh.client.platform`），桌面版在 Electron 壳里加载的是**同一套 Web 前端**，因此两边判定相同。本插件也不使用任何平台专有 API——搜索、跳转与设置读写所依赖的服务（`webServer`、`sessions`、`sessionQuery`、`configForms`）与 DOM 契约（`[data-shell-overlay]`、`[data-chat-*]`、`main.conversation`）都来自 Web 与桌面共享的官方前端包。
+
 ## 安装
 
 **按 dsh 版本线选择**——各线的包**互不兼容**（0.1.7 起重构了插件的设置/配置模型，0.2.0 又换了依赖线），请勿混装：

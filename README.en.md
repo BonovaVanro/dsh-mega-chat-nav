@@ -105,6 +105,17 @@ On screens narrower than 1024px, the nav strip is lightened to a search-only aff
   <sub>Fig. 9 · Search drawer</sub>
 </div>
 
+## Supported environments
+
+**One package serves both the web and the desktop app** (DSH Desktop) — no separate build:
+
+| Environment | How to install |
+|---|---|
+| **Web** (`dsh web` / `dsh --profile web`) | use the CLI commands in the next section |
+| **Desktop** (DSH Desktop) | install/upgrade from the **desktop app's own plugin market** — its profile is owned exclusively by the Electron application, and `dsh plugin --profile desktop …` is refused with `profile "desktop" is managed exclusively by the Electron application` |
+
+Why one package covers both: dsh has exactly **one client platform value, `web`** (`dsh.client.platform`), and the desktop app loads **the same web frontend** inside its Electron shell, so both are classified identically. This plugin also uses no platform-specific APIs — the services it relies on (`webServer`, `sessions`, `sessionQuery`, `configForms`) and the DOM contracts it targets (`[data-shell-overlay]`, `[data-chat-*]`, `main.conversation`) all come from official frontend packages shared by web and desktop.
+
 ## Installation
 
 **Pick the line that matches your dsh** — the packages are **mutually incompatible** across lines (0.1.7 reworked how plugins declare and edit configuration, 0.2.0 changed the dependency line), so never mix them:
